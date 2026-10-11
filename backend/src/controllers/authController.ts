@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { getSupabaseClient, getSupabaseAdminClient } from '../lib/supabase.js';
+import { config } from '../config/env.js';
 
 const registerSchema = z.object({
   email: z.string().email('Valid email address is required.'),
@@ -162,6 +163,41 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
         message: 'Supabase authentication service is not configured.',
       });
       return;
+    }
+
+    // Support quick demo logins in development for seeded demo accounts
+    if (config.isDevelopment && (parsed.password === 'Password123!' || parsed.password === 'demo')) {
+      const demoUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: parsed.email.toLowerCase() },
+            { email: parsed.email.toLowerCase().includes('creator') ? 'alex.chen@crab.demo' : 'partnerships@aws.demo' },
+          ],
+        },
+        include: { creator: true, brand: true },
+      });
+
+      if (demoUser && (parsed.email.includes('.demo') || parsed.email.includes('.local') || parsed.email.includes('creator') || parsed.email.includes('brand'))) {
+        const demoToken = `mock-${demoUser.id}-${demoUser.role.toLowerCase()}`;
+        res.status(200).json({
+          message: 'Demo login successful.',
+          session: {
+            accessToken: demoToken,
+            refreshToken: `mock-refresh-${demoUser.id}`,
+            expiresAt: Math.floor(Date.now() / 1000) + 86400 * 7,
+          },
+          user: {
+            id: demoUser.id,
+            email: demoUser.email,
+            role: demoUser.role,
+            creatorId: demoUser.creator?.id || null,
+            brandId: demoUser.brand?.id || null,
+            creator: demoUser.creator || null,
+            brand: demoUser.brand || null,
+          },
+        });
+        return;
+      }
     }
 
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({

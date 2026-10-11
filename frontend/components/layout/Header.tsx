@@ -28,9 +28,9 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
 
   const toggleRole = async () => {
     if (isBrand) {
-      await login('tech.creator@crab-platform.local', 'CREATOR');
+      await login('tech.creator@crab-platform.local', 'Password123!', 'CREATOR');
     } else {
-      await login('acme.brand@crab-platform.local', 'BRAND');
+      await login('acme.brand@crab-platform.local', 'Password123!', 'BRAND');
     }
   };
 

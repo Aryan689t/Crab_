@@ -37,7 +37,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const demoEmail = demoRole === 'CREATOR' ? 'tech.creator@crab-platform.local' : 'acme.brand@crab-platform.local';
-      await login(demoEmail, demoRole);
+      await login(demoEmail, 'Password123!', demoRole);
     } catch (err: any) {
       setErrorMsg(err.message || 'Demo login failed.');
     } finally {

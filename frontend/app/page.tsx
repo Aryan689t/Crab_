@@ -37,7 +37,7 @@ export default function RootLandingPage() {
 
   const enterDemo = async (role: 'CREATOR' | 'BRAND') => {
     const email = role === 'CREATOR' ? 'tech.creator@crab-platform.local' : 'acme.brand@crab-platform.local';
-    await login(email, role);
+    await login(email, 'Password123!', role);
   };
 
   return (

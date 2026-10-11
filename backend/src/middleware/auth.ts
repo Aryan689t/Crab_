@@ -37,21 +37,45 @@ export async function authenticateToken(
   }
 
   const token = authHeader.split(' ')[1];
-  const supabase = getSupabaseAdminClient();
 
-  if (!supabase) {
-    // In dev mode when Supabase is not configured yet, support mock token for local testing
-    if (config.isDevelopment && token.startsWith('mock-')) {
-      const parts = token.split('-');
+  // In development mode, allow instant mock/demo tokens to bypass Supabase JWT network calls
+  if (config.isDevelopment && token.startsWith('mock-')) {
+    const parts = token.split('-');
+    const userIdOrPart = parts[1];
+    const rolePart = parts[2]?.toUpperCase() === 'BRAND' ? 'BRAND' : 'CREATOR';
+
+    const dbUser = await prisma.user.findFirst({
+      where: userIdOrPart ? {
+        OR: [
+          { id: userIdOrPart },
+          { email: userIdOrPart },
+          { email: `${userIdOrPart}@crab-platform.local` },
+        ],
+      } : { role: rolePart as any },
+    });
+
+    if (dbUser) {
       req.user = {
-        id: `mock-user-${parts[1] || '1'}`,
-        email: `${parts[1] || 'demo'}@crab-platform.local`,
-        role: parts[2]?.toUpperCase() === 'BRAND' ? 'BRAND' : 'CREATOR',
+        id: dbUser.id,
+        email: dbUser.email,
+        role: dbUser.role,
       };
       next();
       return;
     }
 
+    req.user = {
+      id: userIdOrPart || 'demo-user',
+      email: `${userIdOrPart || 'demo'}@crab-platform.local`,
+      role: rolePart as any,
+    };
+    next();
+    return;
+  }
+
+  const supabase = getSupabaseAdminClient();
+
+  if (!supabase) {
     res.status(503).json({
       error: 'AuthServiceUnavailable',
       message: 'Supabase authentication service is not configured on the backend.',

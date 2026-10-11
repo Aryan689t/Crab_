@@ -40,14 +40,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       const savedToken = localStorage.getItem('crab_auth_token');
+      const savedUserStr = localStorage.getItem('crab_user');
+
       if (!savedToken) {
         setLoading(false);
         return;
       }
 
+      // Optimistically restore session instantly so pages render with zero lag
+      if (savedUserStr) {
+        try {
+          const parsedUser = JSON.parse(savedUserStr);
+          setUser(parsedUser);
+          setToken(savedToken);
+          setLoading(false);
+        } catch {
+          // ignore parsing error
+        }
+      }
+
       try {
         setToken(savedToken);
-        // Call backend /api/auth/me to verify real identity and load latest DB profile
+        // Call backend /api/auth/me in background to verify real identity and load latest DB profile
         const res = await fetchApi<{ data: UserProfile }>('/api/auth/me', {}, savedToken);
         if (res?.data) {
           setUser(res.data);
@@ -55,7 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (err: any) {
         console.warn('[AUTH] Saved session expired or invalid:', err.message);
-        // Clean up invalid session
         localStorage.removeItem('crab_auth_token');
         localStorage.removeItem('crab_user');
         setToken(null);
