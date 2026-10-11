@@ -1,0 +1,67 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import { config } from './config/env.js';
+import { apiRouter } from './routes/api.js';
+import { healthRouter } from './routes/health.js';
+import { errorHandler } from './middleware/errorHandler.js';
+
+const app = express();
+
+// Security middleware
+app.use(helmet());
+
+// CORS configuration
+app.use(
+  cors({
+    origin: [config.corsOrigin, 'http://localhost:3000', 'http://127.0.0.1:3000'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
+// Body parsers
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+// Logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (req.originalUrl !== '/health' && req.originalUrl !== '/api/health') {
+      console.log(`[HTTP] ${req.method} ${req.originalUrl} ${res.statusCode} (${duration}ms)`);
+    }
+  });
+  next();
+});
+
+// Root health check & API routes
+app.use('/health', healthRouter);
+app.use('/api', apiRouter);
+
+// 404 handler for undefined routes
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'NotFound',
+    message: `Cannot ${req.method} ${req.originalUrl}`,
+  });
+});
+
+// Centralized error handler
+app.use(errorHandler);
+
+// Start server
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(config.port, () => {
+    console.log(`\n==================================================`);
+    console.log(`🚀 CRAB Backend Server started successfully`);
+    console.log(`📡 URL: http://localhost:${config.port}`);
+    console.log(`🩺 Health check: http://localhost:${config.port}/health`);
+    console.log(`🛠️  Environment: ${config.nodeEnv}`);
+    console.log(`==================================================\n`);
+  });
+}
+
+export default app;

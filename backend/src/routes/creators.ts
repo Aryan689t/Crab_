@@ -1,0 +1,35 @@
+import { Router } from 'express';
+import {
+  getCreatorProfile,
+  upsertCreatorProfile,
+  getCreatorPublicProfile,
+  getCreatorMetrics,
+} from '../controllers/creatorController.js';
+import {
+  getCreatorContent,
+  getContentDetails,
+} from '../controllers/contentController.js';
+import {
+  getCreatorIntelligence,
+  analyzeCreatorIntelligence,
+} from '../controllers/creatorIntelligenceController.js';
+import { authenticateToken, requireRole } from '../middleware/auth.js';
+
+export const creatorRouter = Router();
+
+// Current authenticated creator profile
+creatorRouter.get('/me', authenticateToken, requireRole('CREATOR'), getCreatorProfile);
+creatorRouter.patch('/me', authenticateToken, requireRole('CREATOR'), upsertCreatorProfile);
+creatorRouter.post('/profile', authenticateToken, requireRole('CREATOR'), upsertCreatorProfile);
+creatorRouter.get('/me/metrics', authenticateToken, requireRole('CREATOR'), getCreatorMetrics);
+
+// Content endpoints
+creatorRouter.get('/me/content', authenticateToken, requireRole('CREATOR'), getCreatorContent);
+creatorRouter.get('/me/content/:contentId', authenticateToken, requireRole('CREATOR'), getContentDetails);
+
+// Intelligence endpoints
+creatorRouter.get('/me/intelligence', authenticateToken, requireRole('CREATOR'), getCreatorIntelligence);
+creatorRouter.post('/me/intelligence/analyze', authenticateToken, requireRole('CREATOR'), analyzeCreatorIntelligence);
+
+// Public/discoverable creator endpoint
+creatorRouter.get('/:creatorId', authenticateToken, getCreatorPublicProfile);
