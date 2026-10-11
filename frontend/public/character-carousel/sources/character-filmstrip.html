@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5f0">
+  <title>CRAB — Creator Categories Filmstrip Carousel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f6f5f0;
+      --character-carousel-scale: 1;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #f6f5f0;
+    }
+
+    body {
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .stage {
+      --pointer-x: 50%;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 0 !important;
+      overflow: hidden;
+      isolation: isolate;
+      perspective: 1450px;
+      cursor: grab;
+      touch-action: none;
+      background:
+        radial-gradient(circle at var(--pointer-x) 50%, rgba(255, 255, 255, 0.65) 0%, transparent 60%),
+        #f6f5f0;
+    }
+
+    .stage:active {
+      cursor: grabbing;
+    }
+
+    /* Edge fading into landing page background */
+    .stage::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      pointer-events: none;
+      background: linear-gradient(
+        90deg,
+        rgba(246, 245, 240, 0.96) 0%,
+        rgba(246, 245, 240, 0) 10%,
+        rgba(246, 245, 240, 0) 90%,
+        rgba(246, 245, 240, 0.96) 100%
+      );
+    }
+
+    .deck {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      transform-style: preserve-3d;
+      transform: scale(var(--character-carousel-scale));
+      transform-origin: 50% 50%;
+    }
+
+    .card {
+      --focus: 0;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: clamp(168px, 18vw, 244px);
+      aspect-ratio: 0.72;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid rgba(24, 24, 22, 0.12);
+      border-radius: 8px;
+      color: #181816;
+      background: #ffffff;
+      box-shadow:
+        0 calc(6px + var(--focus) * 18px) calc(16px + var(--focus) * 32px)
+          rgba(24, 24, 22, calc(0.06 + var(--focus) * 0.12)),
+        0 2px 6px rgba(0, 0, 0, 0.03);
+      appearance: none;
+      outline: none;
+      transform-style: preserve-3d;
+      will-change: transform, opacity, filter;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(255, 102, 0, 0.4);
+    }
+
+    .card:focus-visible {
+      box-shadow:
+        0 20px 45px rgba(24, 24, 22, 0.18),
+        0 0 0 3px rgba(255, 102, 0, 0.35);
+    }
+
+    .portrait {
+      position: absolute;
+      inset: 0 0 44px 0;
+      overflow: hidden;
+      background: #eae8e1;
+    }
+
+    .portrait img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scale(calc(1.02 + (1 - var(--focus)) * 0.04));
+      filter: saturate(calc(0.92 + var(--focus) * 0.18)) contrast(1.02);
+      transition: filter 0.25s ease, transform 0.25s ease;
+    }
+
+    .footer {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+      background: #ffffff;
+      border-top: 1px solid rgba(24, 24, 22, 0.08);
+      text-align: center;
+    }
+
+    .category-label {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+      color: #181816;
+      font-family: 'JetBrains Mono', SFMono-Regular, Menlo, monospace;
+      font-size: clamp(10px, 0.92vw, 13px);
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      line-height: 1;
+      transition: color 0.2s ease;
+    }
+
+    .card[aria-current="true"] .category-label {
+      color: #ff6600;
+    }
+
+    .card[aria-current="true"] {
+      border-color: rgba(255, 102, 0, 0.3);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 650px) {
+      .stage {
+        cursor: ew-resize;
+        background:
+          radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.6) 0%, transparent 60%),
+          #f6f5f0;
+      }
+
+      .card {
+        width: clamp(150px, 44vw, 185px);
+      }
+
+      .portrait {
+        inset: 0 0 38px 0;
+      }
+
+      .footer {
+        height: 38px;
+      }
+
+      .category-label {
+        font-size: 11px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .card {
+        will-change: auto;
+      }
+    }
+  </style>
+  <script data-character-carousel-controls>
+  (function () {
+    var nativeFrame = window.requestAnimationFrame.bind(window);
+    var clock = { real: null, virtual: null };
+    var controls = window.__CHARACTER_CAROUSEL_CONTROLS = { speed: 1, scale: 1, paused: false };
+    window.__CHARACTER_CAROUSEL_NOW = function () {
+      return clock.virtual === null ? performance.now() : clock.virtual;
+    };
+    window.requestAnimationFrame = function (callback) {
+      function tick(realTime) {
+        if (clock.real === null) {
+          clock.real = realTime;
+          clock.virtual = realTime;
+        } else {
+          if (!controls.paused) clock.virtual += (realTime - clock.real) * controls.speed;
+          clock.real = realTime;
+        }
+        if (controls.paused) {
+          return nativeFrame(tick);
+        }
+        callback(clock.virtual);
+      }
+      return nativeFrame(tick);
+    };
+    window.addEventListener('message', function (event) {
+      if (!event.data || event.data.type !== 'character-carousel-controls') return;
+      var next = event.data.controls || {};
+      if (Number.isFinite(next.speed)) controls.speed = Math.max(0, Math.min(2.5, next.speed));
+      if (Number.isFinite(next.scale)) controls.scale = Math.max(0.7, Math.min(1.3, next.scale));
+      controls.paused = Boolean(next.paused);
+      document.documentElement.style.setProperty('--character-carousel-scale', String(controls.scale));
+    });
+  })();
+  </script>
+</head>
+<body>
+  <main class="stage" id="stage" aria-label="Interactive CRAB Creator Categories Filmstrip Carousel">
+    <h1 class="sr-only">CRAB Creator Categories Filmstrip</h1>
+    <p class="sr-only">Interactive 3D filmstrip carousel showcasing creator categories aligned with brands.</p>
+    <div class="deck" id="deck" data-testid="filmstrip"></div>
+  </main>
+
+  <script>
+    (() => {
+      // 8 Curated Creator Categories with authentic, activity-based photography
+      const categories = [
+        { id: "fashion", name: "FASHION", image: "/assets/activity-fashion.jpg" },
+        { id: "comedy", name: "COMEDY", image: "/assets/activity-comedy.jpg" },
+        { id: "fitness", name: "FITNESS", image: "/assets/activity-fitness.jpg" },
+        { id: "travel", name: "TRAVEL", image: "/assets/activity-travel.jpg" },
+        { id: "beauty", name: "BEAUTY", image: "/assets/activity-beauty.jpg" },
+        { id: "culinary", name: "CULINARY", image: "/assets/activity-culinary.jpg" },
+        { id: "technology", name: "TECHNOLOGY", image: "/assets/activity-tech.jpg" },
+        { id: "music", name: "MUSIC", image: "/assets/activity-music.jpg" }
+      ];
+
+      const stage = document.querySelector("#stage");
+      const deck = document.querySelector("#deck");
+      const cards = categories.map((cat, index) => {
+        const card = document.createElement("button");
+        card.className = "card";
+        card.type = "button";
+        card.dataset.index = String(index);
+        card.setAttribute("aria-label", `Creator Category: ${cat.name}`);
+        card.innerHTML = `
+          <span class="portrait">
+            <img src="${cat.image}" alt="${cat.name} creator category">
+          </span>
+          <span class="footer">
+            <span class="category-label">${cat.name}</span>
+          </span>`;
+        deck.append(card);
+        return card;
+      });
+
+      const count = cards.length;
+      const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const state = {
+        phase: 0,
+        target: 0,
+        base: 0,
+        pointerX: 0,
+        pointerY: 0,
+        active: false,
+        lastInput: window.__CHARACTER_CAROUSEL_NOW ? window.__CHARACTER_CAROUSEL_NOW() : performance.now()
+      };
+
+      function wrappedDelta(index, phase) {
+        let delta = index - phase;
+        while (delta > count / 2) delta -= count;
+        while (delta < -count / 2) delta += count;
+        return delta;
+      }
+
+      function nearestIndex() {
+        return (Math.round(state.phase) % count + count) % count;
+      }
+
+      function moveTo(index) {
+        const current = nearestIndex();
+        let delta = index - current;
+        if (delta > count / 2) delta -= count;
+        if (delta < -count / 2) delta += count;
+        state.base += delta;
+        state.target = state.base;
+        state.active = false;
+        state.lastInput = window.__CHARACTER_CAROUSEL_NOW ? window.__CHARACTER_CAROUSEL_NOW() : performance.now();
+      }
+
+      cards.forEach((card, index) => {
+        card.addEventListener("click", () => moveTo(index));
+        card.addEventListener("focus", () => moveTo(index));
+      });
+
+      stage.addEventListener("pointermove", (event) => {
+        const rect = stage.getBoundingClientRect();
+        const nx = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width - 0.5) * 2));
+        const ny = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height - 0.5) * 2));
+        state.pointerX = nx;
+        state.pointerY = ny;
+        state.active = true;
+        state.target = state.base + (innerWidth < 650 ? nx * 2.4 : nx * 3.1);
+        state.lastInput = window.__CHARACTER_CAROUSEL_NOW ? window.__CHARACTER_CAROUSEL_NOW() : performance.now();
+        stage.style.setProperty("--pointer-x", `${(nx + 1) * 50}%`);
+      });
+
+      stage.addEventListener("pointerleave", () => {
+        state.active = false;
+        state.pointerX = 0;
+        state.pointerY = 0;
+        state.target = state.base;
+        stage.style.setProperty("--pointer-x", "50%");
+      });
+
+      stage.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const direction = Math.sign(Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX);
+        if (!direction) return;
+        state.base += direction;
+        state.target = state.base;
+        state.active = false;
+        state.lastInput = window.__CHARACTER_CAROUSEL_NOW ? window.__CHARACTER_CAROUSEL_NOW() : performance.now();
+      }, { passive: false });
+
+      addEventListener("keydown", (event) => {
+        const forward = event.key === "ArrowRight" || event.key === "ArrowDown";
+        const backward = event.key === "ArrowLeft" || event.key === "ArrowUp";
+        if (!forward && !backward) return;
+        event.preventDefault();
+        state.base += forward ? 1 : -1;
+        state.target = state.base;
+        state.active = false;
+        state.lastInput = window.__CHARACTER_CAROUSEL_NOW ? window.__CHARACTER_CAROUSEL_NOW() : performance.now();
+      });
+
+      let previousTime = window.__CHARACTER_CAROUSEL_NOW ? window.__CHARACTER_CAROUSEL_NOW() : performance.now();
+
+      function render(time) {
+        const deltaTime = Math.min(32, time - previousTime);
+        previousTime = time;
+        const ease = reducedMotion ? 1 : 1 - Math.pow(0.001, deltaTime / 1000);
+
+        if (!state.active && time - state.lastInput > 3600) {
+          const idle = time - state.lastInput - 3600;
+          state.target = state.base + Math.sin(idle * 0.00042) * 2.45;
+        }
+
+        state.phase += (state.target - state.phase) * ease;
+        const compact = innerWidth < 650;
+        const activeIndex = nearestIndex();
+        const horizontalSpacing = Math.min(168, Math.max(118, innerWidth * 0.116));
+        const verticalSpacing = Math.min(122, Math.max(88, innerHeight * 0.112));
+
+        cards.forEach((card, index) => {
+          const delta = wrappedDelta(index, state.phase);
+          const distance = Math.abs(delta);
+          const focus = Math.exp(-distance * distance * 1.28);
+          const side = Math.max(0, 1 - distance / 5);
+          const direction = Math.sign(delta);
+          const x = compact
+            ? delta * (innerWidth * 0.32)
+            : delta * horizontalSpacing;
+          const y = distance * 8 + state.pointerY * focus * 8;
+          const z = focus * 145 - distance * 148;
+          const scale = 0.58 + side * 0.14 + focus * 0.52;
+          const rotateX = -state.pointerY * focus * 3.5;
+          const rotateY = compact
+            ? -direction * (distance > 0.2 ? 10 + Math.min(distance, 2) * 4 : 0) + state.pointerX * focus * 2
+            : -direction * (distance > 0.2 ? 14 + Math.min(distance, 3) * 5 : 0) + state.pointerX * focus * 3;
+          const rotateZ = delta * 0.5;
+
+          card.style.setProperty("--focus", focus.toFixed(4));
+          card.style.zIndex = String(Math.round(1000 - distance * 100));
+          card.style.opacity = String(Math.max(0.12, side * 0.78 + focus * 0.22));
+          card.style.filter = `blur(${Math.max(0, distance - 1.6) * 0.32}px)`;
+          card.style.transform = [
+            "translate(-50%, -50%)",
+            `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, ${z.toFixed(2)}px)`,
+            `rotateX(${rotateX.toFixed(2)}deg)`,
+            `rotateY(${rotateY.toFixed(2)}deg)`,
+            `rotateZ(${rotateZ.toFixed(2)}deg)`,
+            `scale(${scale.toFixed(4)})`
+          ].join(" ");
+          card.setAttribute("aria-current", index === activeIndex ? "true" : "false");
+        });
+
+        requestAnimationFrame(render);
+      }
+
+      requestAnimationFrame(render);
+    })();
+  </script>
+</body>
+</html>

@@ -53,6 +53,8 @@ const config: Config = {
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', '-apple-system', 'sans-serif'],
         heading: ['var(--font-jakarta)', 'sans-serif'],
+        serif: ['Newsreader', 'Georgia', 'serif'],
+        mono: ['"JetBrains Mono"', 'Menlo', 'monospace'],
       },
       borderRadius: {
         lg: '16px',

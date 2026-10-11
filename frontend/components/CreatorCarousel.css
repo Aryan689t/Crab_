@@ -1,0 +1,21 @@
+/* ==========================================================================
+   Scoped 3D CSS for CRAB Creator Carousel
+   Preserves 3D perspective and transforms without global interference
+   ========================================================================== */
+
+.creator-carousel-stage {
+  perspective: 1450px;
+  transform-style: preserve-3d;
+}
+
+.creator-carousel-deck {
+  transform-style: preserve-3d;
+  transform-origin: 50% 50%;
+}
+
+.creator-carousel-card {
+  transform-style: preserve-3d;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity, filter;
+  backface-visibility: hidden;
+}
