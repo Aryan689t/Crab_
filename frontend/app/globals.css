@@ -1,0 +1,91 @@
+/* CRAB Global Design Tokens & Tailwind Base */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* CRAB Premium Redesign Tokens */
+  --background: #DEE0ED;
+  --sidebar-background: #FFFFFF;
+  --secondary-background: #F3F0EC;
+  --surface: #FFFFFF;
+  --surface-hover: #F7F4F0;
+  --surface-tint: #FFF0E6;
+  --surface-subtle: #F8F9FC;
+  --surface-muted: #E7E8F0;
+
+  --border: #E8E4DF;
+  --border-strong: #D8D2CA;
+  --border-warm: #E8E4DF;
+
+  --text-primary: #18181B;
+  --text-secondary: #66636A;
+  --text-muted: #929096;
+  --text-strong: #18181B;
+
+  --brand-primary: #C62828;
+  --brand-primary-hover: #B71C1C;
+  --brand-orange: #F66A21;
+  --brand-soft: #FFF0E6;
+  --brand-crimson: #C62828;
+  --brand-peach: #FFF0E6;
+
+  --accent-lavender: #8580E8;
+  /* Kept for compatibility if needed */
+
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --info: #3B82F6;
+
+  --surface-page: var(--background);
+  --surface-card: var(--surface);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-inter), sans-serif;
+  font-weight: 400;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-heading {
+  font-family: var(--font-jakarta), sans-serif;
+}
+
+h1 {
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+h2 {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+h3,
+h4 {
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+p {
+  font-family: var(--font-inter), sans-serif;
+  line-height: 1.65;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-inter), sans-serif;
+}
