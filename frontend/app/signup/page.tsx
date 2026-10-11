@@ -24,7 +24,7 @@ export default function SignupPage() {
     setErrorMsg(null);
     setLoading(true);
     try {
-      await signup(email, selectedRole);
+      await signup(email, password, selectedRole);
     } catch (err: any) {
       setErrorMsg(err.message || 'Signup failed.');
     } finally {

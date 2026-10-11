@@ -24,7 +24,7 @@ export default function LoginPage() {
     setErrorMsg(null);
     setLoading(true);
     try {
-      await login(email, role);
+      await login(email, password, role);
     } catch (err: any) {
       setErrorMsg(err.message || 'Login failed. Please try again.');
     } finally {

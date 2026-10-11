@@ -10,7 +10,9 @@
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "test:db": "tsx src/scripts/verifyDb.ts"
+    "test:db": "tsx src/scripts/verifyDb.ts",
+    "test:auth": "tsx src/scripts/verifyAuth.ts",
+    "seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",

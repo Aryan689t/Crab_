@@ -21,10 +21,11 @@ interface AuthContextType {
   user: UserProfile | null;
   token: string | null;
   loading: boolean;
-  login: (email: string, role?: UserRole) => Promise<void>;
-  signup: (email: string, role: UserRole) => Promise<void>;
+  login: (email: string, password?: string, role?: UserRole) => Promise<void>;
+  signup: (email: string, password?: string, role?: UserRole, displayName?: string) => Promise<void>;
   logout: () => void;
   updateUser: (updatedData: Partial<UserProfile>) => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,76 +36,136 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
   const router = useRouter();
 
+  // Validate or restore session from backend on mount
   useEffect(() => {
-    // Check saved session in localStorage
-    const savedToken = localStorage.getItem('crab_auth_token');
-    const savedUser = localStorage.getItem('crab_user');
+    const initializeAuth = async () => {
+      const savedToken = localStorage.getItem('crab_auth_token');
+      if (!savedToken) {
+        setLoading(false);
+        return;
+      }
 
-    if (savedToken && savedUser) {
       try {
         setToken(savedToken);
-        setUser(JSON.parse(savedUser));
-      } catch (err) {
-        console.error('Failed to parse cached user session:', err);
+        // Call backend /api/auth/me to verify real identity and load latest DB profile
+        const res = await fetchApi<{ data: UserProfile }>('/api/auth/me', {}, savedToken);
+        if (res?.data) {
+          setUser(res.data);
+          localStorage.setItem('crab_user', JSON.stringify(res.data));
+        }
+      } catch (err: any) {
+        console.warn('[AUTH] Saved session expired or invalid:', err.message);
+        // Clean up invalid session
+        localStorage.removeItem('crab_auth_token');
+        localStorage.removeItem('crab_user');
+        setToken(null);
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+
+    initializeAuth();
   }, []);
 
-  const login = async (email: string, selectedRole: UserRole = 'CREATOR') => {
+  const login = async (email: string, password = 'Password123!', selectedRole: UserRole = 'CREATOR') => {
     setLoading(true);
     try {
-      let activeToken = `mock-${email.split('@')[0] || 'user'}-${selectedRole.toLowerCase()}`;
+      // 1. Attempt real backend login
+      const res = await fetchApi<{
+        session?: { accessToken: string; refreshToken: string; expiresAt: number };
+        user: UserProfile;
+      }>('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
 
-      // Bypass Supabase network call in local dev to prevent slow timeouts
-      // User is immediately mocked
-      console.warn('[AUTH] Supabase network login bypassed for instant local demo.');
+      const activeToken = res.session?.accessToken;
+      if (!activeToken) {
+        throw new Error('Authentication did not return a valid session.');
+      }
 
-      const userData: UserProfile = {
-        id: `usr_${Date.now()}`,
-        email,
-        role: selectedRole,
-        creatorId: selectedRole === 'CREATOR' ? `creator_${email.split('@')[0] || 'user'}` : null,
-        brandId: selectedRole === 'BRAND' ? `brand_${email.split('@')[0] || 'user'}` : null,
-        displayName: email.split('@')[0] || (selectedRole === 'CREATOR' ? 'Alex Chen' : 'Acme Brand'),
+      const authenticatedUser: UserProfile = {
+        id: res.user.id,
+        email: res.user.email,
+        role: res.user.role,
+        creatorId: res.user.creatorId,
+        brandId: res.user.brandId,
+        displayName: res.user.displayName || email.split('@')[0],
       };
 
       setToken(activeToken);
-      setUser(userData);
+      setUser(authenticatedUser);
       localStorage.setItem('crab_auth_token', activeToken);
-      localStorage.setItem('crab_user', JSON.stringify(userData));
+      localStorage.setItem('crab_user', JSON.stringify(authenticatedUser));
 
-      if (selectedRole === 'CREATOR') {
-        router.push('/creator/dashboard');
-      } else {
+      // Redirect based on actual verified role
+      if (authenticatedUser.role === 'BRAND') {
         router.push('/brand/dashboard');
+      } else {
+        router.push('/creator/dashboard');
       }
+    } catch (err: any) {
+      console.error('[AUTH LOGIN ERROR]', err);
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const signup = async (email: string, role: UserRole) => {
+  const signup = async (
+    email: string,
+    password = 'Password123!',
+    role: UserRole = 'CREATOR',
+    displayName?: string
+  ) => {
     setLoading(true);
     try {
-      const activeToken = `mock-${email.split('@')[0]}-${role.toLowerCase()}`;
-      const userData: UserProfile = {
-        id: `usr_${Date.now()}`,
-        email,
-        role,
-        displayName: email.split('@')[0],
+      const res = await fetchApi<{
+        session?: { accessToken: string };
+        requiresEmailConfirmation: boolean;
+        user: UserProfile;
+      }>('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          password,
+          role,
+          displayName: displayName || email.split('@')[0],
+        }),
+      });
+
+      if (res.requiresEmailConfirmation && !res.session?.accessToken) {
+        throw new Error('Registration successful! Please check your email to confirm your account.');
+      }
+
+      const activeToken = res.session?.accessToken;
+      if (!activeToken) {
+        throw new Error('Registration did not return a session.');
+      }
+
+      const newUser: UserProfile = {
+        id: res.user.id,
+        email: res.user.email,
+        role: res.user.role,
+        creatorId: res.user.creatorId,
+        brandId: res.user.brandId,
+        displayName: displayName || email.split('@')[0],
       };
 
       setToken(activeToken);
-      setUser(userData);
+      setUser(newUser);
       localStorage.setItem('crab_auth_token', activeToken);
-      localStorage.setItem('crab_user', JSON.stringify(userData));
+      localStorage.setItem('crab_user', JSON.stringify(newUser));
 
       if (role === 'CREATOR') {
-        router.push('/onboarding/creator');
+        router.push('/creator/dashboard');
       } else {
-        router.push('/onboarding/brand');
+        router.push('/brand/dashboard');
       }
+    } catch (err: any) {
+      console.error('[AUTH SIGNUP ERROR]', err);
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -125,6 +186,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('crab_user', JSON.stringify(updated));
   };
 
+  const refreshUser = async () => {
+    if (!token) return;
+    try {
+      const res = await fetchApi<{ data: UserProfile }>('/api/auth/me', {}, token);
+      if (res?.data) {
+        setUser(res.data);
+        localStorage.setItem('crab_user', JSON.stringify(res.data));
+      }
+    } catch (err) {
+      console.error('[AUTH REFRESH FAILED]', err);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -135,6 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signup,
         logout,
         updateUser,
+        refreshUser,
       }}
     >
       {children}

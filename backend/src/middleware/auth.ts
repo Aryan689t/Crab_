@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getSupabaseAdminClient } from '../lib/supabase.js';
+import { prisma } from '../lib/prisma.js';
 import { config } from '../config/env.js';
 
 export interface AuthenticatedUser {
@@ -68,10 +69,22 @@ export async function authenticateToken(
       return;
     }
 
+    // If role is in user metadata, use it; otherwise check database
+    let role = data.user.user_metadata?.role as 'CREATOR' | 'BRAND' | undefined;
+    if (!role) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: data.user.id },
+        select: { role: true },
+      });
+      if (dbUser) {
+        role = dbUser.role;
+      }
+    }
+
     req.user = {
       id: data.user.id,
       email: data.user.email || '',
-      role: data.user.user_metadata?.role as 'CREATOR' | 'BRAND' | undefined,
+      role,
     };
 
     next();
