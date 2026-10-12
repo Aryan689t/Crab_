@@ -20,14 +20,17 @@ import {
   ChevronRight
 } from 'lucide-react';
 
+import { fetchApi } from '../../../lib/api';
+
 export default function CreatorOpportunitiesPage() {
-  const { campaigns, applications, applyToCampaign } = useMockStore();
-  const { user } = useAuth();
+  const { campaigns: mockCampaigns, applications, applyToCampaign } = useMockStore();
+  const { user, token } = useAuth();
 
   const creators = getStoredCreators();
   const creatorProfile = creators.find(c => c.id === 'creator_01');
   const creatorNiches = creatorProfile?.primaryNiches || [];
 
+  const [dbCampaigns, setDbCampaigns] = useState<any[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [pitchNote, setPitchNote] = useState('');
   const [applySuccess, setApplySuccess] = useState(false);
@@ -39,9 +42,85 @@ export default function CreatorOpportunitiesPage() {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+    let mounted = true;
+    const loadCampaigns = async () => {
+      setIsLoading(true);
+      try {
+        if (token) {
+          const res = await fetchApi<{ data: any[] }>('/api/campaigns', {}, token);
+          if (mounted && res?.data) {
+            setDbCampaigns(res.data);
+          }
+        }
+      } catch (err) {
+        console.warn('[OPPORTUNITIES] Backend campaigns fetch fallback:', err);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+
+    loadCampaigns();
+
+    return () => {
+      mounted = false;
+    };
+  }, [token]);
+
+  // Transform database campaigns into CampaignItem shape, combining with any store-specific data
+  const campaigns = useMemo(() => {
+    if (!dbCampaigns || dbCampaigns.length === 0) {
+      return mockCampaigns;
+    }
+
+    const transformedDb = dbCampaigns.map((c) => {
+      const niches = c.creatorNiche
+        ? c.creatorNiche.split(',').map((s: string) => s.trim())
+        : c.aiProfile?.inferredNiches || ['Technology', 'AI Tools'];
+      const timelineStr =
+        typeof c.timeline === 'object' && c.timeline?.display
+          ? c.timeline.display
+          : typeof c.timeline === 'object' && c.timeline?.start
+          ? `${c.timeline.start} - ${c.timeline.end}`
+          : 'Active';
+
+      return {
+        id: c.id,
+        title: c.title,
+        brandName: c.brand?.name || 'Partner Brand',
+        brandLogo: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=100',
+        productOrService: c.productOrService || c.title,
+        category: c.brand?.category || 'Technology',
+        objective: c.objective || c.description,
+        budgetMin: Number(c.budgetMin) || 20000,
+        budgetMax: Number(c.budgetMax) || 50000,
+        currency: 'INR',
+        requiredReach: c.requiredReach || 30000,
+        platforms: [c.platform || 'YOUTUBE'],
+        niches: niches,
+        deliverables: [
+          '1 Dedicated Video Breakdown with live demo',
+          'Pinned comment link & social post',
+        ],
+        timeline: timelineStr,
+        exclusivity: c.exclusivity || 'No category exclusivity',
+        status: c.status || 'ACTIVE',
+        invitedCount: 3,
+        appliedCount: 5,
+        acceptedCount: 1,
+        totalSpent: 0,
+        createdAt: c.createdAt || new Date().toISOString(),
+        aiBriefSummary:
+          c.aiProfile?.semanticSummary ||
+          `Campaign looking for ${niches.join(', ')} creators.`,
+        matchScore: 92,
+      };
+    });
+
+    // Merge with any unique mock campaigns not already in DB
+    const dbIds = new Set(transformedDb.map(c => c.id));
+    const extraMocks = mockCampaigns.filter(m => !dbIds.has(m.id));
+    return [...transformedDb, ...extraMocks];
+  }, [dbCampaigns, mockCampaigns]);
 
   const activeCampaign = campaigns.find((c) => c.id === selectedCampaignId);
 

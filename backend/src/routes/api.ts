@@ -3,6 +3,7 @@ import { healthRouter } from './health.js';
 import { authRouter } from './auth.js';
 import { creatorRouter } from './creators.js';
 import { brandRouter } from './brands.js';
+import { campaignRouter } from './campaigns.js';
 import { socialRouter } from './social.js';
 
 export const apiRouter = Router();
@@ -11,6 +12,7 @@ apiRouter.use('/health', healthRouter);
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/creators', creatorRouter);
 apiRouter.use('/brands', brandRouter);
+apiRouter.use('/campaigns', campaignRouter);
 apiRouter.use('/social', socialRouter);
 
 // Base route for API metadata

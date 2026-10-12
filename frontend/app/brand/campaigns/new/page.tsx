@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AppShell } from '../../../../components/layout/AppShell';
-import { useMockStore } from '../../../../mock/store';
 import Link from 'next/link';
+import { AppShell } from '../../../../components/layout/AppShell';
+import { useAuth } from '../../../../lib/auth-context';
+import { fetchApi, invalidateApiCache } from '../../../../lib/api';
 import {
   ArrowLeft,
   Sparkles,
@@ -15,6 +16,8 @@ import {
   Calendar,
   DollarSign,
   Layers,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 
 const SUGGESTED_NICHES = [
@@ -30,7 +33,6 @@ const SUGGESTED_NICHES = [
 
 export default function CreateCampaignPage() {
   const router = useRouter();
-  const { addCampaign } = useMockStore();
 
   const [title, setTitle] = useState('');
   const [productOrService, setProductOrService] = useState('');
@@ -48,6 +50,9 @@ export default function CreateCampaignPage() {
   const [timeline, setTimeline] = useState('Nov 15 - Dec 10, 2026');
   const [exclusivity, setExclusivity] = useState('14 days category exclusivity');
   const [loading, setLoading] = useState(false);
+
+  const { token } = useAuth();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const toggleNiche = (niche: string) => {
     if (selectedNiches.includes(niche)) {
@@ -67,31 +72,46 @@ export default function CreateCampaignPage() {
     setDeliverables(deliverables.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!token) {
+      setErrorMsg('You must be signed in as a Brand to create a campaign.');
+      return;
+    }
+
     setLoading(true);
+    setErrorMsg(null);
 
-    const created = addCampaign({
-      title,
-      brandName: 'Acme Cloud & AI',
-      brandLogo: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
-      productOrService,
-      category,
-      objective,
-      budgetMin: parseInt(budgetMin, 10) || 20000,
-      budgetMax: parseInt(budgetMax, 10) || 50000,
-      currency: 'INR',
-      requiredReach: parseInt(requiredReach, 10) || 25000,
-      platforms: ['YOUTUBE'],
-      niches: selectedNiches,
-      deliverables,
-      timeline,
-      exclusivity,
-      status: 'ACTIVE',
-      aiBriefSummary: `AI Normalized Objective: Promote ${productOrService} targeting ${selectedNiches.join(', ')} creators.`,
-    });
+    try {
+      const payload = {
+        title,
+        description: objective || `Marketing campaign for ${productOrService || title}.`,
+        productOrService,
+        objective,
+        budgetMin: parseInt(budgetMin, 10) || 20000,
+        budgetMax: parseInt(budgetMax, 10) || 50000,
+        requiredReach: parseInt(requiredReach, 10) || 25000,
+        platform: 'YOUTUBE',
+        creatorNiche: selectedNiches.join(', '),
+        timeline: { display: timeline, deliverables },
+        exclusivity,
+        status: 'ACTIVE',
+      };
 
-    router.push(`/brand/campaigns/${created.id}`);
+      const res = await fetchApi<{ data: { id: string } }>('/api/campaigns', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }, token);
+
+      invalidateApiCache('/campaigns');
+      invalidateApiCache('/brands');
+
+      router.push(`/brand/campaigns/${res.data.id}`);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to create campaign.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -109,6 +129,12 @@ export default function CreateCampaignPage() {
         </Link>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-8 border border-[#E7E8F0] shadow-sm space-y-6">
+          {errorMsg && (
+            <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
           <div className="border-b border-[#E7E8F0] pb-4">
             <h2 className="text-xl font-bold text-[#17182B]">Campaign Brief & AI Vectorization Setup</h2>
             <p className="text-xs text-[#626782]">

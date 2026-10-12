@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { AppShell } from '../../../../components/layout/AppShell';
 import { useMockStore } from '../../../../mock/store';
+import { useAuth } from '../../../../lib/auth-context';
+import { fetchApi } from '../../../../lib/api';
 import {
   Layers,
   ArrowLeft,
@@ -34,9 +36,36 @@ export default function CampaignWorkspacePage({
   const campaignId = unwrappedParams?.id || 'cmp_aws_01';
   const { campaigns, applications, updateApplicationStatus } = useMockStore();
 
+  const { token } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'creators' | 'deliverables' | 'aiInsights' | 'payments'>('overview');
+  const [apiCampaign, setApiCampaign] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const campaign =
+  useEffect(() => {
+    let mounted = true;
+    const fetchCampaign = async () => {
+      if (!token || !campaignId) return;
+      setLoading(true);
+      try {
+        const res = await fetchApi<{ data: any }>(`/api/campaigns/${campaignId}`, {}, token);
+        if (mounted && res?.data) {
+          setApiCampaign(res.data);
+        }
+      } catch (err) {
+        console.warn('[CAMPAIGN DETAIL] API fetch fallback to local store:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    fetchCampaign();
+
+    return () => {
+      mounted = false;
+    };
+  }, [campaignId, token]);
+
+  const mockFallback =
     campaigns.find((c) => c.id === campaignId) ||
     campaigns[0] || {
       id: campaignId,
@@ -50,6 +79,32 @@ export default function CampaignWorkspacePage({
       deliverables: ['1 Dedicated YouTube Video', 'Pinned comment link', 'GitHub sample repo'],
       aiBriefSummary: 'Technical brief targeting developers with high intent in cloud hosting.',
     };
+
+  const campaign = apiCampaign
+    ? {
+        id: apiCampaign.id,
+        title: apiCampaign.title,
+        brandName: apiCampaign.brand?.name || mockFallback.brandName,
+        budgetMin: Number(apiCampaign.budgetMin) || mockFallback.budgetMin,
+        budgetMax: Number(apiCampaign.budgetMax) || mockFallback.budgetMax,
+        status: apiCampaign.status || mockFallback.status,
+        timeline:
+          typeof apiCampaign.timeline === 'object' && apiCampaign.timeline?.display
+            ? apiCampaign.timeline.display
+            : typeof apiCampaign.timeline === 'object' && apiCampaign.timeline?.start
+            ? `${apiCampaign.timeline.start} - ${apiCampaign.timeline.end}`
+            : mockFallback.timeline,
+        objective: apiCampaign.objective || apiCampaign.description || mockFallback.objective,
+        deliverables:
+          typeof apiCampaign.timeline === 'object' && apiCampaign.timeline?.deliverables
+            ? apiCampaign.timeline.deliverables
+            : mockFallback.deliverables,
+        requiredReach: apiCampaign.requiredReach || mockFallback.requiredReach || 40000,
+        aiBriefSummary:
+          apiCampaign.aiProfile?.semanticSummary ||
+          `AI brief targeting ${apiCampaign.creatorNiche || 'qualified creators'}.`,
+      }
+    : mockFallback;
 
   const campaignApplications = applications.filter(
     (a) => a.campaignId === campaign.id || a.campaignTitle === campaign.title
