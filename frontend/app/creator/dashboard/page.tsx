@@ -6,13 +6,21 @@ import { useAuth } from '../../../lib/auth-context';
 import { fetchApi } from '../../../lib/api';
 import { Users, Eye, TrendingUp, Layers, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 
+import dynamic from 'next/dynamic';
 import { CreatorHeader } from '../../../components/creator/CreatorHeader';
 import { CreatorProfileBanner } from '../../../components/creator/CreatorProfileBanner';
 import { CreatorMetricCard } from '../../../components/creator/CreatorMetricCard';
-import { AudienceGrowthChart } from '../../../components/creator/AudienceGrowthChart';
 import { CreatorIntelligencePanel } from '../../../components/creator/CreatorIntelligencePanel';
 import { ProfileCompletionPanel } from '../../../components/creator/ProfileCompletionPanel';
 import { RecentActivityList } from '../../../components/creator/RecentActivityList';
+
+const AudienceGrowthChart = dynamic(
+  () => import('../../../components/creator/AudienceGrowthChart').then((mod) => mod.AudienceGrowthChart),
+  {
+    ssr: false,
+    loading: () => <div className="h-72 w-full animate-pulse bg-neutral-100 rounded-2xl" />,
+  }
+);
 
 export default function CreatorDashboardPage() {
   const { user, token, loading: authLoading } = useAuth();

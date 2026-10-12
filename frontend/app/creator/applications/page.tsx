@@ -1,554 +1,423 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../../../lib/auth-context';
-import { fetchApi } from '../../../lib/api';
+import React, { useState } from 'react';
+import Link from 'next/link';
 import {
+  Search,
   ExternalLink,
   MessageSquare,
   Calendar,
   Clock,
-  Video,
-  FileText,
-  Check,
+  CheckCircle2,
   ChevronRight,
   TrendingUp,
   ArrowRight,
-  Loader2,
+  FileText,
+  DollarSign,
   AlertCircle,
-  Inbox
+  Filter,
 } from 'lucide-react';
+import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 
 interface ApplicationItem {
   id: string;
-  campaignId: string;
-  creatorId: string;
-  pitch: string | null;
-  proposedRate: number | string | null;
-  status: 'SUBMITTED' | 'UNDER_REVIEW' | 'ACCEPTED' | 'DECLINED' | 'WITHDRAWN';
-  brandNote: string | null;
-  createdAt: string;
-  updatedAt: string;
-  campaign: {
-    id: string;
-    title: string;
-    description: string;
-    productOrService: string | null;
-    budgetMin: number | null;
-    budgetMax: number | null;
-    platform: string | null;
-    contentType: string | null;
-    status: string;
-    timeline: any;
-    brand: {
-      id: string;
-      name: string;
-      category: string | null;
-      website: string | null;
-    };
-  };
+  brand: string;
+  title: string;
+  logoBg: string;
+  logoText: string;
+  status: 'Under Review' | 'In Discussion' | 'Offer Received' | 'Accepted' | 'Rejected' | 'Expired';
+  submittedAt: string;
+  payout: string;
+  deliverables: string;
+  message: string;
+  deadline: string;
+  stage: number; // 1 to 4
 }
 
+const APPLICATIONS_DATA: ApplicationItem[] = [
+  {
+    id: 'app_1',
+    brand: 'AWS',
+    title: 'Cloud Creator Program',
+    logoBg: '#232F3E',
+    logoText: '#FF9900',
+    status: 'Under Review',
+    submittedAt: '3 days ago',
+    payout: '₹45,000',
+    deliverables: '1 YouTube video + 1 social post',
+    message: 'Looking forward to showcasing serverless container workflows to my developer audience.',
+    deadline: 'Oct 28, 2026',
+    stage: 2,
+  },
+  {
+    id: 'app_2',
+    brand: 'Cursor',
+    title: 'AI Coding Tools Campaign',
+    logoBg: '#000000',
+    logoText: '#FFFFFF',
+    status: 'In Discussion',
+    submittedAt: '5 days ago',
+    payout: '₹60,000',
+    deliverables: '2 YouTube tutorials with workflow demo',
+    message: 'Excited about collaborating! I use Cursor daily and can present deep product demos.',
+    deadline: 'Nov 04, 2026',
+    stage: 3,
+  },
+  {
+    id: 'app_3',
+    brand: 'Notion',
+    title: 'Productivity for Creators',
+    logoBg: '#000000',
+    logoText: '#FFFFFF',
+    status: 'Offer Received',
+    submittedAt: '1 week ago',
+    payout: '₹35,000',
+    deliverables: '1 Template walk-through + Community link',
+    message: 'Shared my custom content calendar template structure.',
+    deadline: 'Nov 12, 2026',
+    stage: 4,
+  },
+  {
+    id: 'app_4',
+    brand: 'JetBrains',
+    title: 'Developer Tools Campaign',
+    logoBg: '#000000',
+    logoText: '#FF318C',
+    status: 'Accepted',
+    submittedAt: '3 weeks ago',
+    payout: '₹55,000',
+    deliverables: 'Dedicated IDE extension tutorial',
+    message: 'Proposal approved by technical marketing team.',
+    deadline: 'Completed',
+    stage: 4,
+  },
+  {
+    id: 'app_5',
+    brand: 'Logitech',
+    title: 'Tech Gear Review Series',
+    logoBg: '#00B8FC',
+    logoText: '#FFFFFF',
+    status: 'Rejected',
+    submittedAt: '2 weeks ago',
+    payout: '₹25,000',
+    deliverables: 'Desk setup integration reel',
+    message: 'Thank you for applying. Currently focused on US-specific creators for this round.',
+    deadline: 'Closed',
+    stage: 1,
+  },
+];
+
 export default function CreatorApplicationsPage() {
-  const { user, token } = useAuth();
-  const [applications, setApplications] = useState<ApplicationItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('All');
-  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
-  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('All');
+  const [selectedAppId, setSelectedAppId] = useState<string>(APPLICATIONS_DATA[0].id);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const INNER_TABS = ['Application Details', 'Messages', 'Brand Info', 'Similar Opportunities'];
-  const [activeInnerTab, setActiveInnerTab] = useState('Application Details');
+  const TABS = [
+    { label: 'All', count: APPLICATIONS_DATA.length },
+    { label: 'Under Review', count: APPLICATIONS_DATA.filter((a) => a.status === 'Under Review').length },
+    { label: 'In Discussion', count: APPLICATIONS_DATA.filter((a) => a.status === 'In Discussion').length },
+    { label: 'Offer Received', count: APPLICATIONS_DATA.filter((a) => a.status === 'Offer Received').length },
+    { label: 'Accepted', count: APPLICATIONS_DATA.filter((a) => a.status === 'Accepted').length },
+  ];
 
-  const fetchApplications = async () => {
-    if (!token) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await fetchApi<{ data: ApplicationItem[] }>('/api/creators/me/applications', {}, token);
-      if (res?.data) {
-        setApplications(res.data);
-        if (res.data.length > 0 && !selectedAppId) {
-          setSelectedAppId(res.data[0].id);
-        }
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load applications.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const filteredApps = APPLICATIONS_DATA.filter((app) => {
+    const matchesTab = activeTab === 'All' || app.status === activeTab;
+    const matchesSearch =
+      searchQuery.trim() === '' ||
+      app.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      app.title.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesTab && matchesSearch;
+  });
 
-  useEffect(() => {
-    fetchApplications();
-  }, [token]);
-
-  // Ensure selectedAppId is valid if list updates
-  useEffect(() => {
-    if (applications.length > 0) {
-      if (!selectedAppId || !applications.some(a => a.id === selectedAppId)) {
-        setSelectedAppId(applications[0].id);
-      }
-    } else {
-      setSelectedAppId(null);
-    }
-  }, [applications, selectedAppId]);
-
-  const handleWithdraw = async (applicationId: string) => {
-    if (!token || withdrawingId) return;
-    const confirmWithdraw = window.confirm('Are you sure you want to withdraw this application?');
-    if (!confirmWithdraw) return;
-
-    setWithdrawingId(applicationId);
-    try {
-      await fetchApi(`/api/applications/${applicationId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'WITHDRAWN' }),
-      }, token);
-
-      setApplications(prev =>
-        prev.map(app => (app.id === applicationId ? { ...app, status: 'WITHDRAWN' } : app))
-      );
-    } catch (err: any) {
-      alert(err.message || 'Failed to withdraw application.');
-    } finally {
-      setWithdrawingId(null);
-    }
-  };
+  const selectedApp =
+    APPLICATIONS_DATA.find((a) => a.id === selectedAppId) || filteredApps[0] || APPLICATIONS_DATA[0];
 
   const getStatusBadge = (status: ApplicationItem['status']) => {
     switch (status) {
-      case 'SUBMITTED':
-        return {
-          label: 'Submitted',
-          color: 'text-amber-700',
-          bg: 'bg-amber-100',
-        };
-      case 'UNDER_REVIEW':
-        return {
-          label: 'Under Review',
-          color: 'text-brand-orange',
-          bg: 'bg-brand-peach/20',
-        };
-      case 'ACCEPTED':
-        return {
-          label: 'Accepted',
-          color: 'text-emerald-700',
-          bg: 'bg-emerald-100',
-        };
-      case 'DECLINED':
-        return {
-          label: 'Declined',
-          color: 'text-slate-600',
-          bg: 'bg-slate-100',
-        };
-      case 'WITHDRAWN':
-        return {
-          label: 'Withdrawn',
-          color: 'text-gray-500',
-          bg: 'bg-gray-100',
-        };
+      case 'Accepted':
+      case 'Offer Received':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
+      case 'In Discussion':
+        return 'bg-[#FFF4EB] text-[#FF6B00] border-[#FF6B00]/40';
+      case 'Under Review':
+        return 'bg-amber-50 text-amber-700 border-amber-200/80';
       default:
-        return {
-          label: status,
-          color: 'text-gray-600',
-          bg: 'bg-gray-100',
-        };
+        return 'bg-[#F8F6F2] text-[#737373] border-[#E7E1DA]';
     }
   };
 
-  const counts = useMemo(() => {
-    return {
-      all: applications.length,
-      submitted: applications.filter(a => a.status === 'SUBMITTED').length,
-      underReview: applications.filter(a => a.status === 'UNDER_REVIEW').length,
-      accepted: applications.filter(a => a.status === 'ACCEPTED').length,
-      declined: applications.filter(a => a.status === 'DECLINED').length,
-      withdrawn: applications.filter(a => a.status === 'WITHDRAWN').length,
-    };
-  }, [applications]);
-
-  const TABS = [
-    { label: 'All', count: counts.all },
-    { label: 'Submitted', count: counts.submitted },
-    { label: 'Under Review', count: counts.underReview },
-    { label: 'Accepted', count: counts.accepted },
-    { label: 'Declined', count: counts.declined },
-    { label: 'Withdrawn', count: counts.withdrawn },
-  ];
-
-  const filteredApps = useMemo(() => {
-    if (activeTab === 'All') return applications;
-    if (activeTab === 'Submitted') return applications.filter(a => a.status === 'SUBMITTED');
-    if (activeTab === 'Under Review') return applications.filter(a => a.status === 'UNDER_REVIEW');
-    if (activeTab === 'Accepted') return applications.filter(a => a.status === 'ACCEPTED');
-    if (activeTab === 'Declined') return applications.filter(a => a.status === 'DECLINED');
-    if (activeTab === 'Withdrawn') return applications.filter(a => a.status === 'WITHDRAWN');
-    return applications;
-  }, [applications, activeTab]);
-
-  const activeApp = applications.find(a => a.id === selectedAppId);
-
-  const formatTimeline = (timeline: any) => {
-    if (!timeline) return 'Flexible';
-    if (typeof timeline === 'string') return timeline;
-    if (timeline.display) return timeline.display;
-    if (timeline.start && timeline.end) return `${timeline.start} - ${timeline.end}`;
-    return '2-4 weeks';
-  };
-
   return (
-    <div className="w-full px-4 md:px-6 lg:px-8 py-8 min-h-screen bg-background text-text-strong font-inter">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-[28px] font-bold text-text-strong tracking-tight font-jakarta">My Applications</h1>
-        <p className="text-[15px] text-text-muted mt-1">Track the status of opportunities you've applied to and view brand decisions.</p>
-      </div>
-
-      {/* Tabs Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border-warm pb-0 mb-6 gap-4">
-        <div className="flex items-center gap-6 overflow-x-auto hide-scrollbar">
-          {TABS.map(tab => (
-            <button
-              key={tab.label}
-              onClick={() => setActiveTab(tab.label)}
-              className={`flex items-center gap-2 pb-3 font-semibold text-[14px] transition-colors relative border-b-2 cursor-pointer ${
-                activeTab === tab.label ? 'border-brand-orange text-text-strong' : 'border-transparent text-text-muted hover:text-text-strong'
-              }`}
+    <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+        {/* 1. Page Header */}
+        <PortalPageHeader
+          eyebrow="Collaboration Pipeline"
+          titlePrefix="Track your"
+          highlightText="brand applications."
+          description="Review response status, proposal details, and brand conversations in real-time."
+          action={
+            <Link
+              href="/creator/opportunities"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-semibold transition shadow-xs"
             >
-              {tab.label}
-              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                activeTab === tab.label ? 'bg-brand-peach/30 text-brand-orange' : 'bg-surface-tint text-text-muted'
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+              <Search className="w-3.5 h-3.5" />
+              <span>Explore More Campaigns</span>
+            </Link>
+          }
+        />
 
-      {/* Main Body */}
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 bg-surface-card rounded-[20px] border border-border-warm">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-orange mb-3" />
-          <p className="text-[14px] font-semibold text-text-muted">Loading your applications...</p>
+        {/* 2. Top Summary KPI Cards */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
+            <div className="text-[11px] text-[#737373] font-medium">Total Applied</div>
+            <div className="text-2xl font-bold text-[#171717] mt-1">
+              {APPLICATIONS_DATA.length}
+            </div>
+            <div className="text-[11px] text-[#737373] mt-0.5">Across all campaigns</div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
+            <div className="text-[11px] text-[#737373] font-medium">In Discussion / Offers</div>
+            <div className="text-2xl font-bold text-[#FF6B00] mt-1">3</div>
+            <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">
+              Active negotiation
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
+            <div className="text-[11px] text-[#737373] font-medium">Under Review</div>
+            <div className="text-2xl font-bold text-[#171717] mt-1">1</div>
+            <div className="text-[11px] text-[#737373] mt-0.5">Brand review pending</div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
+            <div className="text-[11px] text-[#737373] font-medium">Acceptance Rate</div>
+            <div className="text-2xl font-bold text-emerald-700 mt-1">75%</div>
+            <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">
+              Above creator average
+            </div>
+          </div>
+        </section>
+
+        {/* 3. Search and Tabs Bar */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E7E1DA] shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.label}
+                  type="button"
+                  onClick={() => setActiveTab(tab.label)}
+                  className={`whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer border flex items-center gap-2 ${
+                    activeTab === tab.label
+                      ? 'bg-[#FF6B00] text-white border-[#FF6B00] shadow-2xs'
+                      : 'bg-[#F8F6F2] text-[#525252] border-[#E7E1DA] hover:border-[#171717]/30 hover:text-[#171717]'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      activeTab === tab.label
+                        ? 'bg-white text-[#FF6B00]'
+                        : 'bg-white/80 text-[#737373]'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Search Input */}
+            <div className="relative w-full sm:w-64 shrink-0">
+              <Search className="w-4 h-4 text-[#737373] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search applications..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] rounded-xl text-xs text-[#171717] placeholder:text-[#737373] focus:outline-none transition"
+              />
+            </div>
+          </div>
         </div>
-      ) : error ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-surface-card rounded-[20px] border border-border-warm text-center p-6">
-          <AlertCircle className="w-10 h-10 text-red-500 mb-3" />
-          <h3 className="text-[17px] font-bold text-text-strong">Failed to load applications</h3>
-          <p className="text-[14px] text-text-muted mt-1 max-w-md mb-4">{error}</p>
-          <button
-            onClick={fetchApplications}
-            className="px-5 py-2.5 rounded-xl bg-brand-crimson text-white font-bold text-[13px] hover:bg-brand-orange transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      ) : applications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 bg-surface-card rounded-[20px] border border-border-warm text-center p-6">
-          <Inbox className="w-12 h-12 text-text-muted mb-3" />
-          <h3 className="text-[18px] font-bold text-text-strong">No applications submitted yet</h3>
-          <p className="text-[14px] text-text-muted mt-1 max-w-sm mb-6">
-            Explore active brand campaigns and submit your first pitch!
-          </p>
-          <a
-            href="/creator/opportunities"
-            className="px-5 py-2.5 rounded-xl bg-brand-crimson text-white font-bold text-[14px] hover:bg-brand-orange transition-colors shadow-sm"
-          >
-            Discover Campaigns
-          </a>
-        </div>
-      ) : (
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Left Applications List */}
-          <div className="w-full lg:w-[400px] shrink-0 flex flex-col gap-3">
+
+        {/* 4. Master-Detail Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Applications List (5 cols) */}
+          <div className="lg:col-span-5 space-y-3">
             {filteredApps.length === 0 ? (
-              <div className="p-8 text-center bg-surface-card rounded-[16px] border border-border-warm">
-                <p className="text-[13px] text-text-muted">No applications in this category.</p>
+              <div className="bg-white rounded-2xl p-8 border border-[#E7E1DA] text-center text-xs text-[#737373]">
+                No applications match your filter.
               </div>
             ) : (
-              filteredApps.map(app => {
-                const isActive = selectedAppId === app.id;
-                const badge = getStatusBadge(app.status);
-                const brandInitials = (app.campaign.brand.name || 'BR').substring(0, 3).toUpperCase();
-                const submittedDate = new Date(app.createdAt).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric'
-                });
-
+              filteredApps.map((app) => {
+                const isSelected = selectedApp.id === app.id;
                 return (
                   <div
                     key={app.id}
                     onClick={() => setSelectedAppId(app.id)}
-                    className={`p-4 rounded-[16px] border cursor-pointer transition-all flex gap-4 ${
-                      isActive
-                        ? 'border-brand-orange bg-brand-peach/5 shadow-sm'
-                        : 'border-border-warm bg-surface-card hover:border-brand-orange/40 hover:shadow-sm'
+                    className={`p-4 rounded-2xl border transition-all duration-150 cursor-pointer flex items-start gap-3.5 shadow-xs ${
+                      isSelected
+                        ? 'bg-white border-[#FF6B00] ring-1 ring-[#FF6B00]/40'
+                        : 'bg-white border-[#E7E1DA] hover:border-[#171717]/30'
                     }`}
                   >
                     {/* Brand Avatar */}
-                    <div className="w-12 h-12 rounded-full bg-[#17182B] text-white flex items-center justify-center text-[12px] font-bold shrink-0">
-                      {brandInitials}
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs"
+                      style={{ backgroundColor: app.logoBg, color: app.logoText }}
+                    >
+                      {app.brand.slice(0, 3).toUpperCase()}
                     </div>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start mb-1">
-                        <h3 className="font-bold text-[15px] truncate">{app.campaign.brand.name}</h3>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${badge.bg} ${badge.color} whitespace-nowrap ml-2`}>
-                          {badge.label}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-xs text-[#737373] tracking-wide truncate">
+                          {app.brand}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getStatusBadge(
+                            app.status
+                          )}`}
+                        >
+                          {app.status}
                         </span>
                       </div>
-                      <p className="text-[13px] font-medium text-text-strong truncate">{app.campaign.title}</p>
-                      <p className="text-[11px] text-text-muted mt-0.5">Submitted on {submittedDate}</p>
-                      {app.pitch && (
-                        <p className="text-[12px] text-text-muted mt-2 line-clamp-1 italic">
-                          "{app.pitch}"
-                        </p>
-                      )}
+
+                      <h4 className="font-bold text-sm text-[#171717] truncate mt-0.5">
+                        {app.title}
+                      </h4>
+
+                      <div className="flex items-center justify-between text-[11px] text-[#737373] mt-2 pt-2 border-t border-[#E7E1DA]/60">
+                        <span>{app.payout}</span>
+                        <span>{app.submittedAt}</span>
+                      </div>
                     </div>
 
-                    <div className="flex items-center justify-center text-text-muted shrink-0">
-                      <ChevronRight className="w-4 h-4" />
-                    </div>
+                    <ChevronRight
+                      className={`w-4 h-4 shrink-0 self-center transition ${
+                        isSelected ? 'text-[#FF6B00]' : 'text-[#737373]'
+                      }`}
+                    />
                   </div>
                 );
               })
             )}
           </div>
 
-          {/* Right Detail View */}
-          {activeApp && (
-            <div className="flex-1 min-w-0 flex flex-col gap-6">
-              {/* Header Card */}
-              <div className="bg-surface-card border border-border-warm rounded-[20px] p-6 shadow-sm">
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
-                  <div className="flex gap-4">
-                    <div className="w-16 h-16 rounded-[14px] bg-[#17182B] text-brand-orange flex items-center justify-center font-bold text-xl shrink-0">
-                      {(activeApp.campaign.brand.name || 'BR').substring(0, 3).toUpperCase()}
-                    </div>
-                    <div>
-                      <h2 className="text-[14px] font-bold text-text-strong uppercase tracking-wider mb-0.5">
-                        {activeApp.campaign.brand.name}
-                      </h2>
-                      <h1 className="text-[22px] font-bold font-jakarta text-text-strong">{activeApp.campaign.title}</h1>
-                      <p className="text-[14px] text-text-muted mt-1 leading-relaxed">
-                        {activeApp.campaign.description}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {activeApp.status === 'SUBMITTED' && (
-                      <button
-                        onClick={() => handleWithdraw(activeApp.id)}
-                        disabled={withdrawingId === activeApp.id}
-                        className="px-4 py-2 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        {withdrawingId === activeApp.id ? 'Withdrawing...' : 'Withdraw Application'}
-                      </button>
-                    )}
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-orange text-white text-[13px] font-bold shadow-sm hover:bg-[#E05A18] transition-colors cursor-pointer">
-                      <MessageSquare className="w-4 h-4" /> Message Brand
-                    </button>
-                  </div>
+          {/* Right Column: Detailed View (7 cols) */}
+          <div className="lg:col-span-7 bg-white rounded-2xl border border-[#E7E1DA] p-6 shadow-xs space-y-6">
+            {/* Detail Header */}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-5 border-b border-[#E7E1DA]">
+              <div className="flex items-start gap-4">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center text-base font-bold shrink-0 shadow-xs"
+                  style={{
+                    backgroundColor: selectedApp.logoBg,
+                    color: selectedApp.logoText,
+                  }}
+                >
+                  {selectedApp.brand.slice(0, 3).toUpperCase()}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-5 border-t border-border-warm">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-surface-tint flex items-center justify-center">
-                      <Calendar className="w-4 h-4 text-text-muted" />
-                    </div>
-                    <div>
-                      <div className="text-[13px] font-bold">
-                        {activeApp.campaign.budgetMin && activeApp.campaign.budgetMax
-                          ? `₹${Number(activeApp.campaign.budgetMin).toLocaleString()} - ₹${Number(activeApp.campaign.budgetMax).toLocaleString()}`
-                          : 'Negotiable'}
-                      </div>
-                      <div className="text-[11px] text-text-muted font-medium">Budget Range</div>
-                    </div>
+                <div>
+                  <div className="text-xs font-semibold text-[#737373] uppercase tracking-wider">
+                    {selectedApp.brand}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-surface-tint flex items-center justify-center">
-                      <Clock className="w-4 h-4 text-text-muted" />
-                    </div>
-                    <div>
-                      <div className="text-[13px] font-bold">{formatTimeline(activeApp.campaign.timeline)}</div>
-                      <div className="text-[11px] text-text-muted font-medium">Timeline</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-surface-tint flex items-center justify-center">
-                      <Video className="w-4 h-4 text-text-muted" />
-                    </div>
-                    <div>
-                      <div className="text-[13px] font-bold">{activeApp.campaign.platform || 'YOUTUBE'}</div>
-                      <div className="text-[11px] text-text-muted font-medium">Platform</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-surface-tint flex items-center justify-center">
-                      <FileText className="w-4 h-4 text-text-muted" />
-                    </div>
-                    <div>
-                      <div className="text-[13px] font-bold">{activeApp.campaign.contentType || 'Dedicated Video'}</div>
-                      <div className="text-[11px] text-text-muted font-medium">Content Type</div>
-                    </div>
+                  <h2 className="text-lg sm:text-xl font-bold text-[#171717] mt-0.5">
+                    {selectedApp.title}
+                  </h2>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span
+                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${getStatusBadge(
+                        selectedApp.status
+                      )}`}
+                    >
+                      {selectedApp.status}
+                    </span>
+                    <span className="text-xs text-[#737373]">
+                      Submitted {selectedApp.submittedAt}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Inner Tabs */}
-              <div className="flex items-center gap-8 border-b border-border-warm">
-                {INNER_TABS.map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveInnerTab(tab)}
-                    className={`pb-3 text-[14px] font-semibold transition-colors border-b-2 cursor-pointer ${
-                      activeInnerTab === tab ? 'border-brand-orange text-brand-orange' : 'border-transparent text-text-muted hover:text-text-strong'
-                    }`}
-                  >
-                    {tab}
-                  </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  href="/creator/inbox"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#171717] hover:bg-[#FF6B00] text-white text-xs font-semibold transition shadow-xs"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Message Brand</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* Application Progress Stepper */}
+            <div className="space-y-3">
+              <div className="text-xs font-bold text-[#171717]">Proposal Status Tracker</div>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: 'Submitted', done: true },
+                  { label: 'In Review', done: selectedApp.stage >= 2 },
+                  { label: 'Discussion', done: selectedApp.stage >= 3 },
+                  { label: 'Final Offer', done: selectedApp.stage >= 4 },
+                ].map((st, i) => (
+                  <div key={st.label} className="space-y-1.5">
+                    <div
+                      className={`h-1.5 rounded-full transition ${
+                        st.done ? 'bg-[#FF6B00]' : 'bg-[#E7E1DA]'
+                      }`}
+                    />
+                    <div
+                      className={`text-[10px] font-medium ${
+                        st.done ? 'text-[#171717] font-semibold' : 'text-[#737373]'
+                      }`}
+                    >
+                      {st.label}
+                    </div>
+                  </div>
                 ))}
               </div>
+            </div>
 
-              {/* Tab Content */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <div className="xl:col-span-2 space-y-6">
-                  <div>
-                    <h3 className="text-[15px] font-bold">Your Submitted Proposal</h3>
-                    <p className="text-[13px] text-text-muted">
-                      Submitted on {new Date(activeApp.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  </div>
-
-                  {/* Pitch Message */}
-                  <div className="bg-surface-card border border-border-warm rounded-[16px] p-6 text-[14px] leading-relaxed font-medium text-text-strong shadow-sm whitespace-pre-wrap">
-                    {activeApp.pitch || 'No custom pitch provided.'}
-                  </div>
-
-                  {/* Brand Response Note if present */}
-                  {activeApp.brandNote && (
-                    <div className="bg-amber-50/50 border border-amber-200 rounded-[16px] p-5 shadow-sm space-y-1">
-                      <span className="text-[12px] font-bold uppercase tracking-wider text-amber-800 block">
-                        Response from Brand
-                      </span>
-                      <p className="text-[14px] text-amber-950 font-medium leading-relaxed">
-                        "{activeApp.brandNote}"
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Financial & Alignment Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-surface-card border border-border-warm rounded-[16px] p-6 shadow-sm">
-                      <h4 className="text-[14px] font-bold mb-3">Proposed Rate</h4>
-                      <div className="text-[26px] font-extrabold text-brand-orange">
-                        {activeApp.proposedRate
-                          ? `₹${Number(activeApp.proposedRate).toLocaleString()}`
-                          : 'Budget As Stated'}
-                      </div>
-                      <p className="text-[12px] text-text-muted mt-1 font-medium">
-                        Submitted proposal fee for required campaign deliverables.
-                      </p>
-                    </div>
-
-                    <div className="bg-surface-card border border-border-warm rounded-[16px] p-6 shadow-sm">
-                      <h4 className="text-[14px] font-bold mb-3">Deliverables Requirement</h4>
-                      <ul className="space-y-2 text-[13px] text-text-muted font-medium">
-                        <li className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span>1 Dedicated Video breakdown</span>
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span>Link in description & social amplification</span>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
+            {/* Metadata Grid */}
+            <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA]">
+              <div>
+                <div className="text-[11px] text-[#737373]">Agreed Payout / Budget</div>
+                <div className="text-base font-bold text-[#171717] mt-0.5">
+                  {selectedApp.payout}
                 </div>
+              </div>
 
-                {/* Right Status Timeline */}
-                <div className="space-y-6">
-                  <div className="bg-surface-card border border-border-warm rounded-[16px] p-6 shadow-sm">
-                    <h4 className="text-[14px] font-bold mb-4">Application Lifecycle</h4>
+              <div>
+                <div className="text-[11px] text-[#737373]">Campaign Deadline</div>
+                <div className="text-base font-bold text-[#171717] mt-0.5">
+                  {selectedApp.deadline}
+                </div>
+              </div>
 
-                    <div className="bg-surface-tint border border-border-warm rounded-xl p-4 mb-6">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-3 h-3 rounded-full bg-brand-orange" />
-                        <span className="text-[14px] font-bold text-text-strong">
-                          Current: {getStatusBadge(activeApp.status).label}
-                        </span>
-                      </div>
-                      <p className="text-[12px] text-text-muted font-medium ml-5">
-                        {activeApp.status === 'ACCEPTED'
-                          ? 'Congratulations! The brand has accepted your proposal.'
-                          : activeApp.status === 'DECLINED'
-                          ? 'The brand declined this proposal.'
-                          : activeApp.status === 'WITHDRAWN'
-                          ? 'You withdrew this application.'
-                          : 'The brand is currently reviewing your application.'}
-                      </p>
-                    </div>
-
-                    <div className="relative pl-3 space-y-6 before:absolute before:inset-y-0 before:left-[15px] before:w-0.5 before:bg-border-warm">
-                      <div className="relative z-10 flex gap-4">
-                        <div className="w-2.5 h-2.5 rounded-full bg-brand-orange mt-1.5 shrink-0 ml-[3px]" />
-                        <div>
-                          <h5 className="text-[13px] font-bold">Application Submitted</h5>
-                          <p className="text-[11px] text-text-muted">
-                            {new Date(activeApp.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="relative z-10 flex gap-4">
-                        <div className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ml-[3px] ${
-                          activeApp.status !== 'SUBMITTED' ? 'bg-brand-orange' : 'bg-border-strong'
-                        }`} />
-                        <div>
-                          <h5 className="text-[13px] font-bold text-text-strong">Brand Review</h5>
-                          <p className="text-[11px] text-text-muted">
-                            {activeApp.status !== 'SUBMITTED' ? 'Completed / In Progress' : 'Pending'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="relative z-10 flex gap-4">
-                        <div className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ml-[3px] ${
-                          activeApp.status === 'ACCEPTED'
-                            ? 'bg-emerald-600'
-                            : activeApp.status === 'DECLINED'
-                            ? 'bg-red-500'
-                            : 'bg-border-strong'
-                        }`} />
-                        <div>
-                          <h5 className="text-[13px] font-bold text-text-strong">
-                            {activeApp.status === 'ACCEPTED'
-                              ? 'Accepted & Collaboration Initiated'
-                              : activeApp.status === 'DECLINED'
-                              ? 'Declined'
-                              : 'Final Decision'}
-                          </h5>
-                          {activeApp.updatedAt && (
-                            <p className="text-[11px] text-text-muted">
-                              {new Date(activeApp.updatedAt).toLocaleDateString()}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+              <div className="col-span-2 pt-2 border-t border-[#E7E1DA]/80">
+                <div className="text-[11px] text-[#737373]">Deliverables</div>
+                <div className="text-xs font-semibold text-[#171717] mt-0.5">
+                  {selectedApp.deliverables}
                 </div>
               </div>
             </div>
-          )}
+
+            {/* Proposal Message */}
+            <div className="space-y-2">
+              <div className="text-xs font-bold text-[#171717]">Submitted Creator Pitch</div>
+              <p className="text-xs text-[#525252] p-4 rounded-xl bg-white border border-[#E7E1DA] leading-relaxed">
+                "{selectedApp.message}"
+              </p>
+            </div>
+          </div>
         </div>
-      )}
+      </main>
     </div>
   );
 }

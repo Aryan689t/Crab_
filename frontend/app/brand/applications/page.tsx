@@ -1,9 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { AppShell } from '../../../components/layout/AppShell';
-import { useAuth } from '../../../lib/auth-context';
-import { fetchApi } from '../../../lib/api';
+import React, { useState } from 'react';
+import { useMockStore } from '../../../mock/store';
 import Link from 'next/link';
 import {
   FileText,
@@ -13,329 +11,265 @@ import {
   ArrowRight,
   Send,
   Building2,
-  Loader2,
-  AlertCircle
+  Search,
+  MessageSquare,
+  ChevronRight,
+  Clock,
+  DollarSign,
+  Check,
+  X,
 } from 'lucide-react';
-
-interface BrandApplicationItem {
-  id: string;
-  campaignId: string;
-  creatorId: string;
-  pitch: string | null;
-  proposedRate: number | string | null;
-  status: 'SUBMITTED' | 'UNDER_REVIEW' | 'ACCEPTED' | 'DECLINED' | 'WITHDRAWN';
-  brandNote: string | null;
-  createdAt: string;
-  updatedAt: string;
-  campaign: {
-    id: string;
-    title: string;
-    budgetMin: number | null;
-    budgetMax: number | null;
-    platform: string | null;
-    contentType: string | null;
-    status: string;
-  };
-  creator: {
-    id: string;
-    displayName: string;
-    profileImageUrl: string | null;
-    bio: string | null;
-    location: string | null;
-    socialAccounts?: Array<{
-      platform: string;
-      username: string;
-      status: string;
-    }>;
-    metricSnapshots?: Array<{
-      followers: number | null;
-      averageViews: number | null;
-      engagementRate: number | null;
-    }>;
-  };
-}
+import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { StarRating } from '../../../components/ui/StarRating';
 
 export default function BrandApplicationsPage() {
-  const { user, token } = useAuth();
-  const [applications, setApplications] = useState<BrandApplicationItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const { applications, updateApplicationStatus } = useMockStore();
   const [filter, setFilter] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchApplications = async () => {
-    if (!token) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await fetchApi<{ data: BrandApplicationItem[] }>('/api/brands/me/applications', {}, token);
-      if (res?.data) {
-        setApplications(res.data);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load applications.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const filteredApps = applications.filter((app) => {
+    const matchFilter = filter === 'ALL' || app.status === filter;
+    const matchSearch =
+      searchQuery.trim() === '' ||
+      app.creatorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      app.creatorHandle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      app.campaignTitle.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchFilter && matchSearch;
+  });
 
-  useEffect(() => {
-    fetchApplications();
-  }, [token]);
-
-  const handleUpdateStatus = async (applicationId: string, newStatus: 'ACCEPTED' | 'DECLINED') => {
-    if (!token || processingId) return;
-
-    setProcessingId(applicationId);
-    setActionError(null);
-
-    // Save previous state for rollback if needed
-    const prevApplications = [...applications];
-
-    // Optimistic UI update
-    setApplications(prev =>
-      prev.map(app => (app.id === applicationId ? { ...app, status: newStatus } : app))
-    );
-
-    try {
-      const res = await fetchApi<{ message: string; data: BrandApplicationItem }>(
-        `/api/applications/${applicationId}`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ status: newStatus }),
-        },
-        token
-      );
-
-      // Confirm with server response
-      if (res?.data) {
-        setApplications(prev =>
-          prev.map(app => (app.id === applicationId ? res.data : app))
-        );
-      }
-    } catch (err: any) {
-      // Rollback on error
-      setApplications(prevApplications);
-      setActionError(err.message || `Failed to update application status to ${newStatus}.`);
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const filteredApps = useMemo(() => {
-    if (filter === 'ALL') return applications;
-    return applications.filter((app) => app.status === filter);
-  }, [applications, filter]);
-
-  const counts = useMemo(() => {
-    return {
-      all: applications.length,
-      submitted: applications.filter(a => a.status === 'SUBMITTED').length,
-      accepted: applications.filter(a => a.status === 'ACCEPTED').length,
-      declined: applications.filter(a => a.status === 'DECLINED').length,
-    };
-  }, [applications]);
+  const submittedCount = applications.filter((a) => a.status === 'SUBMITTED').length;
+  const inDiscussionCount = applications.filter((a) => a.status === 'OFFER_RECEIVED').length;
+  const acceptedCount = applications.filter((a) => a.status === 'ACCEPTED').length;
 
   return (
-    <AppShell
-      title="Creator Applications & Inbound Proposals"
-      subtitle="Review creator proposals, evaluate creator alignment, and accept collaborations."
-    >
-      {/* Error banner if action failed */}
-      {actionError && (
-        <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center justify-between">
-          <span>{actionError}</span>
-          <button
-            onClick={() => setActionError(null)}
-            className="text-red-800 underline font-bold ml-2 cursor-pointer"
+    <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+        {/* 1. Unified Page Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <PortalPageHeader
+            eyebrow="Proposal Inbound"
+            titlePrefix="Review creator"
+            highlightText="applications & proposals."
+            description="Evaluate creator pitches, review explainable AI fit scores, negotiate deliverables, and approve partnerships."
+          />
+
+          <Link
+            href="/brand/creators"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-[#E7E1DA] text-[#171717] hover:bg-[#F8F6F2] text-xs font-semibold shadow-xs transition self-start md:self-center shrink-0"
           >
-            Dismiss
-          </button>
+            <Users className="w-4 h-4 text-[#737373]" />
+            <span>Discover More Creators</span>
+          </Link>
         </div>
-      )}
 
-      {/* Tabs / Filter bar */}
-      <div className="flex items-center space-x-2 border-b border-[#E7E8F0] pb-2">
-        <button
-          onClick={() => setFilter('ALL')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
-            filter === 'ALL'
-              ? 'bg-[#17182B] text-white shadow-sm'
-              : 'text-[#626782] hover:bg-white hover:text-[#17182B]'
-          }`}
-        >
-          All Incoming ({counts.all})
-        </button>
-        <button
-          onClick={() => setFilter('SUBMITTED')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer ${
-            filter === 'SUBMITTED'
-              ? 'bg-[#17182B] text-white shadow-sm'
-              : 'text-[#626782] hover:bg-white hover:text-[#17182B]'
-          }`}
-        >
-          <span>Pending Review</span>
-          <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
-            {counts.submitted}
-          </span>
-        </button>
-        <button
-          onClick={() => setFilter('ACCEPTED')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
-            filter === 'ACCEPTED'
-              ? 'bg-[#17182B] text-white shadow-sm'
-              : 'text-[#626782] hover:bg-white hover:text-[#17182B]'
-          }`}
-        >
-          Accepted & Signed ({counts.accepted})
-        </button>
-        <button
-          onClick={() => setFilter('DECLINED')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
-            filter === 'DECLINED'
-              ? 'bg-[#17182B] text-white shadow-sm'
-              : 'text-[#626782] hover:bg-white hover:text-[#17182B]'
-          }`}
-        >
-          Declined ({counts.declined})
-        </button>
-      </div>
-
-      {/* Applications content */}
-      <section className="space-y-4 pt-2">
-        {isLoading ? (
-          <div className="bg-white rounded-2xl p-16 text-center border border-[#E7E8F0] space-y-3">
-            <Loader2 className="w-8 h-8 mx-auto animate-spin text-brand-orange" />
-            <p className="text-xs font-semibold text-[#626782]">Loading campaign proposals...</p>
+        {/* 2. Application Pipeline Metrics */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
+            <div className="flex items-center justify-between text-[#737373]">
+              <span className="text-xs font-semibold uppercase tracking-wider">Total Received</span>
+              <FileText className="w-4 h-4 text-[#FF6B00]" />
+            </div>
+            <div className="text-2xl font-bold text-[#171717]">{applications.length}</div>
+            <p className="text-[11px] text-[#737373]">Across all campaigns</p>
           </div>
-        ) : error ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-[#E7E8F0] space-y-3">
-            <AlertCircle className="w-8 h-8 mx-auto text-red-500" />
-            <p className="text-sm font-bold text-[#17182B]">Unable to load applications</p>
-            <p className="text-xs text-[#626782]">{error}</p>
+
+          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
+            <div className="flex items-center justify-between text-[#737373]">
+              <span className="text-xs font-semibold uppercase tracking-wider">Awaiting Review</span>
+              <Clock className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="text-2xl font-bold text-amber-600">{submittedCount}</div>
+            <p className="text-[11px] text-amber-700 font-medium">Action required</p>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
+            <div className="flex items-center justify-between text-[#737373]">
+              <span className="text-xs font-semibold uppercase tracking-wider">Negotiations</span>
+              <MessageSquare className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="text-2xl font-bold text-[#171717]">{inDiscussionCount}</div>
+            <p className="text-[11px] text-[#737373]">Offers under discussion</p>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
+            <div className="flex items-center justify-between text-[#737373]">
+              <span className="text-xs font-semibold uppercase tracking-wider">Accepted Deals</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="text-2xl font-bold text-emerald-700">{acceptedCount}</div>
+            <p className="text-[11px] text-emerald-700 font-medium">Ready for production</p>
+          </div>
+        </div>
+
+        {/* 3. Toolbar & Status Filter */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E7E1DA] shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Search Input */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-[#737373] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by creator name, handle or campaign..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] rounded-xl text-xs sm:text-sm text-[#171717] placeholder:text-[#737373] focus:outline-none transition"
+            />
+          </div>
+
+          {/* Status Tabs */}
+          <div className="inline-flex items-center gap-1 p-1 bg-[#F8F6F2] rounded-xl border border-[#E7E1DA] self-start sm:self-auto overflow-x-auto">
             <button
-              onClick={fetchApplications}
-              className="px-4 py-2 rounded-xl bg-brand-crimson text-white text-xs font-semibold hover:bg-brand-orange transition"
+              type="button"
+              onClick={() => setFilter('ALL')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                filter === 'ALL'
+                  ? 'bg-[#FF6B00] text-white shadow-xs'
+                  : 'text-[#737373] hover:text-[#171717]'
+              }`}
             >
-              Retry
+              All Incoming ({applications.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter('SUBMITTED')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                filter === 'SUBMITTED'
+                  ? 'bg-[#FF6B00] text-white shadow-xs'
+                  : 'text-[#737373] hover:text-[#171717]'
+              }`}
+            >
+              <span>Pending Review</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-white/20 text-xs font-bold">
+                {submittedCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter('ACCEPTED')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                filter === 'ACCEPTED'
+                  ? 'bg-[#FF6B00] text-white shadow-xs'
+                  : 'text-[#737373] hover:text-[#171717]'
+              }`}
+            >
+              Accepted & Signed ({acceptedCount})
             </button>
           </div>
-        ) : filteredApps.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-[#E7E8F0] space-y-3">
-            <Users className="w-8 h-8 mx-auto text-[#8B90A5]" />
-            <p className="text-sm font-bold text-[#17182B]">No applications in this category</p>
-            <p className="text-xs text-[#626782]">Find creators and review published campaigns.</p>
-            <Link
-              href="/brand/creators"
-              className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-[#F4511E] text-white text-xs font-semibold"
-            >
-              <span>Discover Creators</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        ) : (
-          filteredApps.map((app) => {
-            const handle = app.creator.socialAccounts?.[0]?.username || '@creator';
-            const metrics = app.creator.metricSnapshots?.[0];
-            const followerStr = metrics?.followers
-              ? `${(metrics.followers / 1000).toFixed(0)}k followers`
-              : null;
+        </div>
 
-            return (
+        {/* 4. Applications List */}
+        <section className="space-y-4">
+          {filteredApps.length === 0 ? (
+            <div className="bg-white rounded-2xl p-12 text-center border border-[#E7E1DA] space-y-3">
+              <Users className="w-8 h-8 mx-auto text-[#737373] opacity-60" />
+              <p className="text-sm font-bold text-[#171717]">No applications found</p>
+              <p className="text-xs text-[#737373]">
+                Try adjusting your search criteria or invite verified creators directly.
+              </p>
+              <Link
+                href="/brand/creators"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FF6B00] text-white text-xs font-semibold"
+              >
+                <span>Discover Creators</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          ) : (
+            filteredApps.map((app) => (
               <div
                 key={app.id}
-                className="bg-white rounded-2xl p-6 border border-[#E7E8F0] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-[#8580E8]/40 transition"
+                className="bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6 hover:shadow-sm transition"
               >
-                <div className="flex items-start space-x-4 min-w-0 flex-1">
-                  {app.creator.profileImageUrl ? (
-                    <img
-                      src={app.creator.profileImageUrl}
-                      alt={app.creator.displayName}
-                      className="w-12 h-12 rounded-2xl object-cover border border-[#E7E8F0] shrink-0"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-2xl bg-brand-peach/30 text-brand-crimson font-bold flex items-center justify-center shrink-0 text-sm">
-                      {app.creator.displayName.substring(0, 2).toUpperCase()}
+                <div className="flex items-start gap-4">
+                  <img
+                    src={app.creatorAvatar}
+                    alt={app.creatorName}
+                    className="w-14 h-14 rounded-2xl object-cover border border-[#E7E1DA] shrink-0"
+                  />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-base text-[#171717]">{app.creatorName}</h3>
+                      <StarRating rating={4.9} size="xs" />
+                      <span className="text-xs text-[#737373]">{app.creatorHandle}</span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-xs font-bold text-emerald-700">
+                        {app.matchScore}% Fit
+                      </span>
                     </div>
-                  )}
 
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center space-x-2 flex-wrap">
-                      <h3 className="font-bold text-base text-[#17182B]">{app.creator.displayName}</h3>
-                      <span className="text-xs text-[#8B90A5]">{handle}</span>
-                      {followerStr && (
-                        <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                          {followerStr}
+                    <p className="text-xs font-semibold text-[#171717]">
+                      Campaign: <span className="font-normal text-[#737373]">{app.campaignTitle}</span>
+                    </p>
+
+                    <p className="text-xs text-[#737373]">
+                      Deliverables: <strong className="text-[#171717]">{app.deliverablesSummary}</strong>
+                    </p>
+
+                    {app.note && (
+                      <div className="p-3 bg-[#F8F6F2] rounded-xl border border-[#E7E1DA] mt-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#737373] block mb-0.5">
+                          Creator Proposal Pitch
                         </span>
-                      )}
-                    </div>
-                    <p className="text-xs font-semibold text-[#17182B]">
-                      Campaign: {app.campaign.title}
-                    </p>
-                    <p className="text-xs text-[#626782]">
-                      Platform: {app.campaign.platform || 'YOUTUBE'} • Format: {app.campaign.contentType || 'Video'}
-                    </p>
-
-                    {app.pitch && (
-                      <p className="text-[12px] text-[#17182B] bg-[#F8F9FC] p-3 rounded-lg border border-[#E7E8F0] mt-2 whitespace-pre-wrap leading-relaxed">
-                        <span className="font-bold text-[#8580E8] block mb-0.5">Creator Pitch:</span>
-                        "{app.pitch}"
-                      </p>
+                        <p className="text-xs text-[#171717] italic">"{app.note}"</p>
+                      </div>
                     )}
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 self-start md:self-center shrink-0">
+                {/* Right Actions & Payout */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 self-start md:self-center shrink-0">
                   <div className="text-left sm:text-right">
-                    <span className="text-sm font-bold text-[#17182B] block">
-                      {app.proposedRate
-                        ? `₹${Number(app.proposedRate).toLocaleString()}`
-                        : app.campaign.budgetMin
-                        ? `₹${Number(app.campaign.budgetMin).toLocaleString()} (Standard)`
-                        : 'Proposed'}
+                    <span className="text-base font-extrabold text-[#171717] block">
+                      ₹{app.proposedRate.toLocaleString()}
                     </span>
-                    <span className="text-[10px] text-[#8B90A5]">Fee</span>
+                    <span className="text-[10px] text-[#737373] uppercase tracking-wider font-semibold">
+                      Proposed Fee
+                    </span>
                   </div>
 
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-bold text-center ${
+                    className={`px-3 py-1 rounded-full text-xs font-bold text-center border ${
                       app.status === 'ACCEPTED'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : app.status === 'DECLINED'
-                        ? 'bg-slate-100 text-slate-700'
-                        : app.status === 'WITHDRAWN'
-                        ? 'bg-gray-100 text-gray-600'
-                        : 'bg-amber-100 text-amber-800'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : app.status === 'OFFER_RECEIVED'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}
                   >
-                    {app.status === 'SUBMITTED' ? 'Pending Review' : app.status}
+                    {app.status === 'SUBMITTED' ? 'Under Review' : app.status.replace('_', ' ')}
                   </span>
 
                   {app.status === 'SUBMITTED' && (
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => handleUpdateStatus(app.id, 'ACCEPTED')}
-                        disabled={processingId === app.id}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition disabled:opacity-50 cursor-pointer"
+                        type="button"
+                        onClick={() => updateApplicationStatus(app.id, 'ACCEPTED')}
+                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs transition cursor-pointer flex items-center gap-1"
                       >
-                        {processingId === app.id ? 'Updating...' : 'Accept Proposal'}
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Accept Proposal</span>
                       </button>
                       <button
-                        onClick={() => handleUpdateStatus(app.id, 'DECLINED')}
-                        disabled={processingId === app.id}
-                        className="px-3 py-2 rounded-xl bg-[#F5F6FA] hover:bg-red-50 hover:text-red-600 text-[#626782] text-xs font-semibold border border-[#E7E8F0] transition disabled:opacity-50 cursor-pointer"
+                        type="button"
+                        onClick={() => updateApplicationStatus(app.id, 'DECLINED')}
+                        className="px-3 py-2 rounded-xl bg-white hover:bg-rose-50 hover:text-rose-600 text-[#737373] text-xs font-semibold border border-[#E7E1DA] transition cursor-pointer"
                       >
                         Decline
                       </button>
                     </div>
                   )}
+
+                  <Link
+                    href={`/brand/inbox?creator=${app.creatorId}`}
+                    className="p-2 rounded-xl border border-[#E7E1DA] text-[#737373] hover:text-[#FF6B00] hover:bg-[#FFF4EB] transition"
+                    title="Message Creator"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </Link>
                 </div>
               </div>
-            );
-          })
-        )}
-      </section>
-    </AppShell>
+            ))
+          )}
+        </section>
+      </main>
+    </div>
   );
 }

@@ -23,6 +23,8 @@ export interface CreatorItem {
   keyFitReasons: string[];
   warningNotes?: string[];
   isShortlisted?: boolean;
+  rating?: number;
+  reviewCount?: number;
 }
 
 export interface CampaignItem {
@@ -30,6 +32,8 @@ export interface CampaignItem {
   title: string;
   brandName: string;
   brandLogo: string;
+  brandRating?: number;
+  brandReviewCount?: number;
   productOrService: string;
   category: string;
   objective: string;
@@ -101,6 +105,8 @@ export const INITIAL_CREATORS: CreatorItem[] = [
     ],
     warningNotes: ['Prefers deep-dive technical integrations over standard 30s shoutouts'],
     isShortlisted: true,
+    rating: 4.9,
+    reviewCount: 38,
   },
   {
     id: 'creator_02',
@@ -129,6 +135,8 @@ export const INITIAL_CREATORS: CreatorItem[] = [
       'Strong audience concentration in early-stage tech builders',
     ],
     isShortlisted: false,
+    rating: 4.8,
+    reviewCount: 29,
   },
   {
     id: 'creator_03',
@@ -157,6 +165,8 @@ export const INITIAL_CREATORS: CreatorItem[] = [
       'High historical view retention on hands-on benchmarks',
     ],
     isShortlisted: false,
+    rating: 4.7,
+    reviewCount: 42,
   },
   {
     id: 'creator_04',
@@ -185,6 +195,8 @@ export const INITIAL_CREATORS: CreatorItem[] = [
       'Passionate founder and builder audience base',
     ],
     isShortlisted: false,
+    rating: 4.9,
+    reviewCount: 19,
   },
 ];
 
@@ -194,6 +206,8 @@ export const INITIAL_CAMPAIGNS: CampaignItem[] = [
     title: 'AWS Developer Cloud Acceleration Sprint',
     brandName: 'Amazon Web Services',
     brandLogo: 'https://images.unsplash.com/photo-1523474253046-8cd2748b5fd2?w=100',
+    brandRating: 4.9,
+    brandReviewCount: 142,
     productOrService: 'AWS App Runner & Bedrock AI SDKs',
     category: 'TECHNOLOGY',
     objective: 'Drive developer adoption and hands-on tutorials for serverless AI deployments.',
@@ -219,6 +233,8 @@ export const INITIAL_CAMPAIGNS: CampaignItem[] = [
     title: 'Veloce AI Fullstack IDE Launch',
     brandName: 'Veloce AI',
     brandLogo: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
+    brandRating: 4.7,
+    brandReviewCount: 36,
     productOrService: 'Veloce Autonomous Code Editor',
     category: 'TECHNOLOGY',
     objective: 'Generate developer buzz, workflow demos, and beta registrations.',
@@ -244,6 +260,8 @@ export const INITIAL_CAMPAIGNS: CampaignItem[] = [
     title: 'Supabase Vector Database Benchmark Series',
     brandName: 'Supabase Ecosystem',
     brandLogo: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=100',
+    brandRating: 4.9,
+    brandReviewCount: 98,
     productOrService: 'PostgreSQL pgvector & Embeddings API',
     category: 'TECHNOLOGY',
     objective: 'Showcase real-time semantic search performance and architectural simplicity.',

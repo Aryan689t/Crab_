@@ -99,9 +99,16 @@ export async function fetchApi<T>(
 
   const executeRequest = async (): Promise<T> => {
     try {
+      // 3.5-second abort signal to prevent hanging requests on network delay
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
         headers,
+        signal: options.signal || controller.signal,
+      }).finally(() => {
+        clearTimeout(timeoutId);
       });
 
       if (!response.ok) {

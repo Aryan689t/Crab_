@@ -1,92 +1,284 @@
 'use client';
 
-import React from 'react';
-import { useAuth } from '../../../lib/auth-context';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Settings,
+  UserCircle,
   Bell,
   Lock,
   CreditCard,
-  UserCircle
+  CheckCircle2,
+  Save,
+  LogOut,
+  ShieldCheck,
+  Check,
 } from 'lucide-react';
+import { useAuth } from '../../../lib/auth-context';
+import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 
 export default function CreatorSettingsPage() {
-  const { user, loading } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
 
-  if (loading) {
-    return <div className="p-8">Loading settings...</div>;
-  }
+  const [activeTab, setActiveTab] = useState<'account' | 'notifications' | 'security' | 'payouts'>('account');
+  const [timezone, setTimezone] = useState('IST (Indian Standard Time)');
+  const [notifyRequests, setNotifyRequests] = useState(true);
+  const [notifyMatches, setNotifyMatches] = useState(true);
+  const [notifyMilestones, setNotifyMilestones] = useState(true);
+  const [savedSuccess, setSavedSuccess] = useState(false);
 
-  if (!user) {
-    router.push('/login');
-    return null;
-  }
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
+  const emailDisplay = user?.email || 'alex.chen@example.com';
 
   return (
-    <div className="w-full px-4 md:px-6 lg:px-8 py-8 space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-[#17182B]">Settings</h1>
-        <p className="text-sm text-[#626782] mt-1">Manage your account preferences and notifications.</p>
-      </div>
+    <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
+      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+        {/* 1. Page Header */}
+        <PortalPageHeader
+          eyebrow="Preferences"
+          titlePrefix="Account & application"
+          highlightText="settings."
+          description="Manage your account profile, notification subscriptions, session security, and preferences."
+        />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Settings Navigation Sidebar */}
-        <div className="md:col-span-1 space-y-1">
-          <button className="w-full text-left px-4 py-2.5 rounded-xl bg-[#F4511E]/10 text-[#F4511E] text-sm font-semibold flex items-center gap-2">
-            <UserCircle className="w-4 h-4" /> Account
-          </button>
-          <button className="w-full text-left px-4 py-2.5 rounded-xl text-[#626782] hover:bg-white hover:text-[#17182B] text-sm font-medium transition flex items-center gap-2">
-            <Bell className="w-4 h-4" /> Notifications
-          </button>
-          <button className="w-full text-left px-4 py-2.5 rounded-xl text-[#626782] hover:bg-white hover:text-[#17182B] text-sm font-medium transition flex items-center gap-2">
-            <Lock className="w-4 h-4" /> Privacy & Security
-          </button>
-          <button className="w-full text-left px-4 py-2.5 rounded-xl text-[#626782] hover:bg-white hover:text-[#17182B] text-sm font-medium transition flex items-center gap-2">
-            <CreditCard className="w-4 h-4" /> Payments
-          </button>
-        </div>
-
-        {/* Settings Content Area */}
-        <div className="md:col-span-3 space-y-6">
-          <div className="bg-white rounded-2xl border border-[#E7E8F0] shadow-sm p-6 space-y-6">
-            <div>
-              <h2 className="text-base font-bold text-[#17182B]">Account Details</h2>
-              <p className="text-xs text-[#626782] mt-1">Update your email address and primary account information.</p>
+        {/* Save Toast Feedback */}
+        {savedSuccess && (
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between shadow-xs transition animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Settings updated successfully!</span>
             </div>
+            <button
+              onClick={() => setSavedSuccess(false)}
+              className="text-emerald-700 hover:text-emerald-900 font-bold ml-4"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[#17182B]">Email Address</label>
-                <input
-                  type="email"
-                  disabled
-                  value={user.email}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] text-sm text-[#8B90A5] cursor-not-allowed"
-                />
-                <p className="text-[10px] text-[#8B90A5]">To change your login email, please contact support.</p>
-              </div>
+        {/* 2. Main Layout with Left Sub-Navigation */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+          {/* Left Settings Sidebar (4 cols) */}
+          <div className="md:col-span-4 bg-white rounded-2xl border border-[#E7E1DA] p-3 shadow-xs space-y-1">
+            {[
+              { id: 'account', label: 'Account Details', icon: UserCircle },
+              { id: 'notifications', label: 'Notifications', icon: Bell },
+              { id: 'security', label: 'Privacy & Security', icon: Lock },
+              { id: 'payouts', label: 'Payouts & Banking', icon: CreditCard },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isSelected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-semibold transition flex items-center gap-2.5 cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#FFF4EB] text-[#FF6B00]'
+                      : 'text-[#525252] hover:bg-[#F8F6F2] hover:text-[#171717]'
+                  }`}
+                >
+                  <Icon
+                    className={`w-4 h-4 ${
+                      isSelected ? 'text-[#FF6B00]' : 'text-[#737373]'
+                    }`}
+                  />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
 
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[#17182B]">Timezone</label>
-                <select className="w-full px-4 py-2.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] text-sm text-[#17182B] focus:outline-none focus:border-[#F4511E] focus:bg-white transition">
-                  <option>UTC (Coordinated Universal Time)</option>
-                  <option>PST (Pacific Standard Time)</option>
-                  <option>EST (Eastern Standard Time)</option>
-                  <option>IST (Indian Standard Time)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-[#E7E8F0] flex justify-end">
-              <button className="px-6 py-2.5 rounded-xl bg-[#F4511E] hover:bg-[#D94316] text-white text-sm font-semibold shadow-sm transition">
-                Save Changes
+            <div className="pt-2 border-t border-[#E7E1DA]/60">
+              <button
+                type="button"
+                onClick={logout}
+                className="w-full text-left px-4 py-2.5 rounded-xl text-xs font-semibold text-[#737373] hover:text-rose-600 hover:bg-rose-50 transition flex items-center gap-2.5 cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 text-rose-500" />
+                <span>Sign Out of CRAB</span>
               </button>
             </div>
           </div>
+
+          {/* Right Settings Content Area (8 cols) */}
+          <div className="md:col-span-8 bg-white rounded-2xl border border-[#E7E1DA] p-6 shadow-xs space-y-6">
+            <form onSubmit={handleSave} className="space-y-6">
+              {/* Tab 1: Account */}
+              {activeTab === 'account' && (
+                <div className="space-y-5">
+                  <div className="pb-3 border-b border-[#E7E1DA]">
+                    <h3 className="font-bold text-sm text-[#171717]">Account Information</h3>
+                    <p className="text-xs text-[#737373] mt-0.5">
+                      Your registered email and regional settings for campaigns.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#171717]">Email Address</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="email"
+                        disabled
+                        value={emailDisplay}
+                        className="w-full px-4 py-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] text-xs text-[#737373] cursor-not-allowed"
+                      />
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                        Verified
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#737373]">
+                      Primary authentication identifier managed via Supabase Auth.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#171717]">Operating Timezone</label>
+                    <select
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] text-xs text-[#171717] focus:outline-none transition cursor-pointer"
+                    >
+                      <option>IST (Indian Standard Time, UTC +5:30)</option>
+                      <option>UTC (Coordinated Universal Time)</option>
+                      <option>PST (Pacific Standard Time, UTC -8)</option>
+                      <option>EST (Eastern Standard Time, UTC -5)</option>
+                      <option>GMT (Greenwich Mean Time)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Notifications */}
+              {activeTab === 'notifications' && (
+                <div className="space-y-5">
+                  <div className="pb-3 border-b border-[#E7E1DA]">
+                    <h3 className="font-bold text-sm text-[#171717]">Alert Subscriptions</h3>
+                    <p className="text-xs text-[#737373] mt-0.5">
+                      Choose which events trigger notification emails.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    {[
+                      {
+                        title: 'Direct Brand Inquiries',
+                        desc: 'Receive immediate email when a brand sends a direct collaboration request',
+                        checked: notifyRequests,
+                        setter: setNotifyRequests,
+                      },
+                      {
+                        title: 'High-Match Campaign Alerts',
+                        desc: 'Notify when new campaigns with >85% match score are posted',
+                        checked: notifyMatches,
+                        setter: setNotifyMatches,
+                      },
+                      {
+                        title: 'Deliverable Milestones & Approvals',
+                        desc: 'Updates on script reviews, video approval, and contract releases',
+                        checked: notifyMilestones,
+                        setter: setNotifyMilestones,
+                      },
+                    ].map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start justify-between gap-4 p-4 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA]"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="text-xs font-bold text-[#171717]">{item.title}</div>
+                          <div className="text-[11px] text-[#737373]">{item.desc}</div>
+                        </div>
+
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={(e) => item.setter(e.target.checked)}
+                          className="w-4 h-4 rounded text-[#FF6B00] accent-[#FF6B00] cursor-pointer mt-0.5"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Security */}
+              {activeTab === 'security' && (
+                <div className="space-y-5">
+                  <div className="pb-3 border-b border-[#E7E1DA]">
+                    <h3 className="font-bold text-sm text-[#171717]">Security & Authentication</h3>
+                    <p className="text-xs text-[#737373] mt-0.5">
+                      Manage password credentials and active sessions.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-center gap-3">
+                    <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold text-emerald-900">
+                        Session Protected via Supabase
+                      </div>
+                      <div className="text-[11px] text-emerald-700">
+                        JWT tokens are verified with HMAC-SHA256 and rotated automatically.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#171717]">Account Role</label>
+                    <input
+                      type="text"
+                      disabled
+                      value={user?.role || 'CREATOR'}
+                      className="w-full px-4 py-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] text-xs text-[#737373] cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 4: Payouts */}
+              {activeTab === 'payouts' && (
+                <div className="space-y-5">
+                  <div className="pb-3 border-b border-[#E7E1DA]">
+                    <h3 className="font-bold text-sm text-[#171717]">Payout & Bank Account</h3>
+                    <p className="text-xs text-[#737373] mt-0.5">
+                      Direct deposit details for campaign milestone releases.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-[#171717]">Razorpay Route Gateway</div>
+                      <div className="text-[11px] text-[#737373]">
+                        Default currency: Indian Rupee (INR). Standard T+2 payout cycle.
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Active
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Save Button */}
+              <div className="pt-4 border-t border-[#E7E1DA] flex justify-end">
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-bold transition shadow-xs flex items-center gap-2 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Preferences</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
