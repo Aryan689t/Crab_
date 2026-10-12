@@ -23,7 +23,7 @@ import {
 import { fetchApi } from '../../../lib/api';
 
 export default function CreatorOpportunitiesPage() {
-  const { campaigns: mockCampaigns, applications, applyToCampaign } = useMockStore();
+  const { campaigns: mockCampaigns } = useMockStore();
   const { user, token } = useAuth();
 
   const creators = getStoredCreators();
@@ -31,9 +31,13 @@ export default function CreatorOpportunitiesPage() {
   const creatorNiches = creatorProfile?.primaryNiches || [];
 
   const [dbCampaigns, setDbCampaigns] = useState<any[]>([]);
+  const [dbApplications, setDbApplications] = useState<any[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [pitchNote, setPitchNote] = useState('');
+  const [proposedRate, setProposedRate] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [applySuccess, setApplySuccess] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'pay' | 'ending'>('match');
@@ -43,23 +47,32 @@ export default function CreatorOpportunitiesPage() {
 
   useEffect(() => {
     let mounted = true;
-    const loadCampaigns = async () => {
+    const loadData = async () => {
       setIsLoading(true);
       try {
         if (token) {
-          const res = await fetchApi<{ data: any[] }>('/api/campaigns', {}, token);
-          if (mounted && res?.data) {
-            setDbCampaigns(res.data);
+          const [cmpRes, appsRes] = await Promise.allSettled([
+            fetchApi<{ data: any[] }>('/api/campaigns', {}, token),
+            fetchApi<{ data: any[] }>('/api/creators/me/applications', {}, token),
+          ]);
+
+          if (mounted) {
+            if (cmpRes.status === 'fulfilled' && cmpRes.value?.data) {
+              setDbCampaigns(cmpRes.value.data);
+            }
+            if (appsRes.status === 'fulfilled' && appsRes.value?.data) {
+              setDbApplications(appsRes.value.data);
+            }
           }
         }
       } catch (err) {
-        console.warn('[OPPORTUNITIES] Backend campaigns fetch fallback:', err);
+        console.warn('[OPPORTUNITIES] Backend data fetch error:', err);
       } finally {
         if (mounted) setIsLoading(false);
       }
     };
 
-    loadCampaigns();
+    loadData();
 
     return () => {
       mounted = false;
@@ -160,21 +173,54 @@ export default function CreatorOpportunitiesPage() {
       .slice(0, 3);
   }, [campaigns]);
 
-  const handleApply = (e: React.FormEvent) => {
+  const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCampaignId) return;
+    if (!selectedCampaignId || isSubmitting) return;
 
-    applyToCampaign(selectedCampaignId, 'creator_01', pitchNote);
-    setApplySuccess(true);
-    setTimeout(() => {
-      setApplySuccess(false);
-      setSelectedCampaignId(null);
-      setPitchNote('');
-    }, 1800);
+    if (!token) {
+      setApplyError('Please log in with your creator account to submit an application.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setApplyError(null);
+
+    try {
+      const payload: { pitch?: string; proposedRate?: number } = {};
+      if (pitchNote.trim()) payload.pitch = pitchNote.trim();
+      if (proposedRate.trim() && !isNaN(Number(proposedRate))) {
+        payload.proposedRate = Number(proposedRate);
+      }
+
+      const res = await fetchApi<{ message: string; data: any }>(
+        `/api/campaigns/${selectedCampaignId}/applications`,
+        {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        },
+        token
+      );
+
+      if (res?.data) {
+        setDbApplications((prev) => [...prev, res.data]);
+      }
+
+      setApplySuccess(true);
+      setTimeout(() => {
+        setApplySuccess(false);
+        setSelectedCampaignId(null);
+        setPitchNote('');
+        setProposedRate('');
+      }, 1800);
+    } catch (err: any) {
+      setApplyError(err.message || 'Failed to submit application. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isAlreadyApplied = (campaignId: string) => {
-    return applications.some((a) => a.campaignId === campaignId);
+    return dbApplications.some((a) => a.campaignId === campaignId);
   };
 
   const SkeletonCard = () => (
@@ -581,6 +627,28 @@ export default function CreatorOpportunitiesPage() {
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <label className="text-[14px] font-bold text-text-strong flex justify-between">
+                    Proposed Rate (₹)
+                    <span className="text-[12px] font-medium text-text-muted font-normal">Optional</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={proposedRate}
+                    onChange={(e) => setProposedRate(e.target.value)}
+                    placeholder={`e.g. ${activeCampaign.budgetMin || 35000}`}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border-warm bg-surface-card text-[14px] text-text-strong focus:outline-none focus:ring-2 focus:ring-brand-crimson transition-all shadow-sm"
+                  />
+                </div>
+
+                {applyError && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[13px] font-semibold">
+                    {applyError}
+                  </div>
+                )}
+
                 {applySuccess ? (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -594,16 +662,18 @@ export default function CreatorOpportunitiesPage() {
                   <div className="flex items-center space-x-3 pt-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedCampaignId(null)}
-                      className="w-1/2 py-3 rounded-xl border border-border-warm text-[14px] font-bold text-text-muted hover:bg-surface-tint transition-colors focus-visible:outline-none"
+                      disabled={isSubmitting}
+                      onClick={() => { setSelectedCampaignId(null); setApplyError(null); }}
+                      className="w-1/2 py-3 rounded-xl border border-border-warm text-[14px] font-bold text-text-muted hover:bg-surface-tint transition-colors focus-visible:outline-none disabled:opacity-50"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="w-1/2 py-3 rounded-xl bg-brand-crimson hover:bg-brand-orange text-white text-[14px] font-bold shadow-md transition-all flex items-center justify-center space-x-2 focus-visible:outline-none"
+                      disabled={isSubmitting}
+                      className="w-1/2 py-3 rounded-xl bg-brand-crimson hover:bg-brand-orange text-white text-[14px] font-bold shadow-md transition-all flex items-center justify-center space-x-2 focus-visible:outline-none disabled:opacity-60 cursor-pointer"
                     >
-                      <span>Submit Pitch</span>
+                      <span>{isSubmitting ? 'Submitting...' : 'Submit Pitch'}</span>
                     </button>
                   </div>
                 )}

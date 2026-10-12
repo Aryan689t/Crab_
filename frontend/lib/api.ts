@@ -121,6 +121,18 @@ export async function fetchApi<T>(
         if (endpoint.includes('/creators/')) invalidateApiCache('/creators');
         if (endpoint.includes('/brands/')) invalidateApiCache('/brands');
         if (endpoint.includes('/social/')) invalidateApiCache('/social');
+        if (endpoint.includes('/applications') || endpoint.includes('/application')) {
+          invalidateApiCache('/applications');
+          invalidateApiCache('/application');
+          invalidateApiCache('/creators/me/applications');
+          invalidateApiCache('/brands/me/applications');
+          invalidateApiCache('/campaigns');
+        }
+        if (endpoint.includes('/campaigns/')) {
+          invalidateApiCache('/campaigns');
+          invalidateApiCache('/creators/me/applications');
+          invalidateApiCache('/brands/me/applications');
+        }
       }
 
       return data as T;
