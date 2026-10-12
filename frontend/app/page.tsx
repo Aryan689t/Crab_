@@ -231,17 +231,7 @@ export default function RootLandingPage() {
             </div>
           </section>
 
-          <h1 className="sr-only">Your Creativity Deserves the Right Connections.</h1>
-
-          {/* Supporting Statement / Quote (Quiet, Editorial Typography) */}
-          <div className="max-w-[620px] mx-auto text-xs sm:text-sm font-serif italic text-[#76746e] leading-relaxed mb-6">
-            <p>
-              [1] “True alignment isn't vanity reach—it's shared identity, genuine audience affinity, and collaboration that feels completely natural to both sides.”
-            </p>
-            <span className="block mt-1.5 font-mono text-[11px] not-italic text-[#ff6600] font-medium tracking-wide">
-              — CRAB Founding Principle
-            </span>
-          </div>
+          <h1 className="sr-only">YOUR CREATIVITY DESERVES THE RIGHT CONNECTIONS.</h1>
 
           {/* Descriptive Paragraph */}
           <p className="max-w-[700px] mx-auto text-base sm:text-lg text-[#4a4944] leading-relaxed mb-8">
