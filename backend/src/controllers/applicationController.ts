@@ -509,8 +509,8 @@ export async function updateApplicationStatus(req: Request, res: Response, next:
     // Use transaction if acceptance requires creating or updating a collaboration record
     let updatedApplication;
     if (parsed.status === 'ACCEPTED') {
-      updatedApplication = await prisma.$transaction(async (tx) => {
-        const app = await tx.application.update({
+      updatedApplication = await prisma.$transaction(async (tx: any) => {
+        const app = await (tx.application || tx.applications).update({
           where: { id },
           data: {
             status: 'ACCEPTED',
