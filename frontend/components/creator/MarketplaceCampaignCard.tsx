@@ -37,7 +37,7 @@ const coverMap: Record<string, string> = {
   cmp_supadb_03: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?q=80&w=600&auto=format&fit=crop',
   cmp_vercel_04: 'https://images.unsplash.com/photo-1618401471353-b98afee0b2eb?q=80&w=600&auto=format&fit=crop',
   cmp_gymshark_05: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=600&auto=format&fit=crop',
-  cmp_notion_06: 'https://images.unsplash.com/photo-1484480974693-6ca0a78fc36b?q=80&w=600&auto=format&fit=crop',
+  cmp_notion_06: 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=800&q=80',
   cmp_framer_07: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?q=80&w=600&auto=format&fit=crop',
   cmp_sony_08: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=600&auto=format&fit=crop',
   cmp_hellofresh_09: 'https://images.unsplash.com/photo-1493770348161-369560ae357d?q=80&w=600&auto=format&fit=crop',
@@ -54,7 +54,11 @@ export function MarketplaceCampaignCard({
   const [bookmarked, setBookmarked] = useState(false);
   const [imgError, setImgError] = useState(false);
 
-  const coverUrl = coverMap[campaign.id] || defaultCover;
+  const coverUrl =
+    (campaign as any).coverImage ||
+    (campaign as any).imageUrl ||
+    coverMap[campaign.id] ||
+    defaultCover;
   const matchScore = campaign.matchScore ?? 90;
   const deadline = campaign.deadline || campaign.timeline || 'Closes in 5 days';
   const niches = campaign.niches || ['Technology', 'Creator Economy'];
@@ -75,8 +79,9 @@ export function MarketplaceCampaignCard({
         {/* Cover Image Container */}
         <div className="relative aspect-[16/10] w-full overflow-hidden bg-[#F4EFEA]">
           <img
-            src={coverUrl}
+            src={imgError ? defaultCover : coverUrl}
             alt={campaign.title}
+            onError={() => setImgError(true)}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ease-out"
           />
 

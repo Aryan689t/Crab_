@@ -49,10 +49,12 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#F8F9FC] flex flex-col justify-between">
       {/* Header */}
       <header className="px-8 h-20 flex items-center justify-between border-b border-[#E7E8F0] bg-white">
-        <Link href="/" className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#F4511E] flex items-center justify-center text-white font-bold text-xl shadow-sm">
-            🦀
-          </div>
+        <Link href="/" className="flex items-center space-x-3 group">
+          <img
+            src="/crab-logo.png"
+            alt="CRAB"
+            className="w-10 h-10 object-contain group-hover:scale-105 transition-transform"
+          />
           <div>
             <span className="font-bold text-xl tracking-tight text-[#17182B]">CRAB</span>
             <span className="hidden sm:inline-block ml-2 text-xs text-[#8B90A5] border-l border-[#E7E8F0] pl-2 font-medium">
@@ -86,7 +88,11 @@ export default function LoginPage() {
                   : 'text-[#8B90A5] hover:text-[#17182B]'
               }`}
             >
-              <User className="w-4 h-4 text-[#8580E8]" />
+              <img
+                src="/crab-logo.png"
+                alt="Creator"
+                className="w-4 h-4 object-contain"
+              />
               <span>Creator View</span>
             </button>
             <button
@@ -98,7 +104,11 @@ export default function LoginPage() {
                   : 'text-[#8B90A5] hover:text-[#17182B]'
               }`}
             >
-              <Building2 className="w-4 h-4 text-[#F4511E]" />
+              <img
+                src="/crab-logo.png"
+                alt="Brand"
+                className="w-4 h-4 object-contain"
+              />
               <span>Brand View</span>
             </button>
           </div>

@@ -53,6 +53,7 @@ export interface CampaignItem {
   totalSpent: number;
   createdAt: string;
   aiBriefSummary: string;
+  coverImage?: string;
   matchScore?: number;
   deadline?: string;
 }
@@ -343,6 +344,7 @@ export const INITIAL_CAMPAIGNS: CampaignItem[] = [
     title: 'Notion AI Productivity Systems',
     brandName: 'Notion',
     brandLogo: 'https://images.unsplash.com/photo-1611162616475-46b635cb6868?w=100',
+    coverImage: 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=800&q=80',
     productOrService: 'Notion AI workspaces',
     category: 'PRODUCTIVITY',
     objective: 'Demonstrate how Notion AI accelerates daily workflows and project management.',

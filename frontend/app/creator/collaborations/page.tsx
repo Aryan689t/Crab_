@@ -410,10 +410,8 @@ export default function CreatorCollaborationsPage() {
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
         {/* Page Header */}
         <PortalPageHeader
-          eyebrow="Active Partnerships"
-          titlePrefix="YouTube Collaborations &"
-          highlightText="Deliverables."
-          description="Connect your YouTube channel, monitor real uploaded videos, and submit deliverables for brand review."
+          titlePrefix="Active and past"
+          highlightText="collaborations."
         />
 
         {/* Sync / Notification Alert Banner */}

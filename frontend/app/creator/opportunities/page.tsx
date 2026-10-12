@@ -197,13 +197,11 @@ export default function CreatorOpportunitiesPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* 1. Unified Page Header */}
         <PortalPageHeader
-          eyebrow="Marketplace"
           titlePrefix="Discover campaigns that"
           highlightText="fit you."
-          description="Browse curated brand partnerships aligned with your audience niches and content style. Apply directly with your verified stats."
         />
 
         {/* 2. Search & Toolbar Strip */}

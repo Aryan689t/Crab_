@@ -50,10 +50,12 @@ export function Sidebar() {
       {/* Brand Header */}
       <div>
         <div className="h-16 px-6 border-b border-[#E7E8F0] flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#F4511E] flex items-center justify-center text-white font-bold text-base shadow-sm">
-              🦀
-            </div>
+          <Link href="/" className="flex items-center space-x-2.5 group">
+            <img
+              src="/crab-logo.png"
+              alt="CRAB"
+              className="w-8 h-8 object-contain group-hover:scale-105 transition-transform"
+            />
             <div>
               <span className="font-bold text-base tracking-tight text-[#17182B]">CRAB</span>
               <span className="text-[10px] text-[#8580E8] ml-1.5 font-bold uppercase tracking-wider">
