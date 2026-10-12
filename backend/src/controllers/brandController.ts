@@ -162,3 +162,158 @@ export async function getBrandPublicProfile(req: Request, res: Response, next: N
     next(err);
   }
 }
+
+function formatRelativeTime(date: Date): string {
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+export async function getBrandRecentActivity(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+      return;
+    }
+
+    const brand = await prisma.brand.findFirst({
+      where: {
+        OR: [{ userId: req.user.id }, ...(req.user.email ? [{ user: { email: req.user.email } }] : [])],
+      },
+    });
+
+    if (!brand) {
+      res.status(200).json({ data: { activities: [], unreadCount: 0 } });
+      return;
+    }
+
+    const [applications, collaborations, payments, campaigns] = await Promise.all([
+      prisma.application.findMany({
+        where: { campaign: { brandId: brand.id } },
+        include: {
+          creator: { select: { id: true, displayName: true } },
+          campaign: { select: { id: true, title: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      prisma.collaboration.findMany({
+        where: { brandId: brand.id },
+        include: {
+          creator: { select: { id: true, displayName: true } },
+          campaign: { select: { id: true, title: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 10,
+      }),
+      prisma.payment.findMany({
+        where: { payerUserId: req.user.id },
+        include: {
+          collaboration: {
+            include: {
+              creator: { select: { id: true, displayName: true } },
+              campaign: { select: { id: true, title: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+      prisma.campaign.findMany({
+        where: { brandId: brand.id },
+        select: { id: true, title: true, status: true, createdAt: true, updatedAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+    ]);
+
+    const activities: Array<{
+      id: string;
+      title: string;
+      description: string;
+      time: string;
+      timestamp: Date;
+      iconType: 'proposal' | 'milestone' | 'agreement' | 'payment' | 'campaign';
+      href: string;
+      status?: string;
+    }> = [];
+
+    // 1. Applications
+    applications.forEach((app: any) => {
+      activities.push({
+        id: `app_${app.id}`,
+        title: 'New proposal received',
+        description: `${app.creator?.displayName || 'Creator'} applied to "${app.campaign?.title || 'Campaign'}"`,
+        time: formatRelativeTime(new Date(app.createdAt)),
+        timestamp: new Date(app.createdAt),
+        iconType: 'proposal',
+        href: '/brand/applications',
+        status: app.status,
+      });
+    });
+
+    // 2. Collaborations
+    collaborations.forEach((collab: any) => {
+      activities.push({
+        id: `collab_${collab.id}`,
+        title: collab.status === 'ACCEPTED' || collab.status === 'PROPOSED' ? 'Agreement signed' : 'Milestone updated',
+        description: `Partnership with ${collab.creator?.displayName || 'Creator'} on "${collab.campaign?.title || 'Campaign'}" (${collab.status.toLowerCase()})`,
+        time: formatRelativeTime(new Date(collab.updatedAt)),
+        timestamp: new Date(collab.updatedAt),
+        iconType: collab.status === 'ACCEPTED' ? 'agreement' : 'milestone',
+        href: '/brand/collaborations',
+        status: collab.status,
+      });
+    });
+
+    // 3. Payments
+    payments.forEach((p: any) => {
+      activities.push({
+        id: `pay_${p.id}`,
+        title: 'Escrow payment verified',
+        description: `₹${Number(p.amount).toLocaleString()} compensation recorded (${p.status.toLowerCase()})`,
+        time: formatRelativeTime(new Date(p.createdAt)),
+        timestamp: new Date(p.createdAt),
+        iconType: 'payment',
+        href: '/brand/collaborations',
+        status: p.status,
+      });
+    });
+
+    // 4. Campaigns created recently
+    campaigns.forEach((camp: any) => {
+      activities.push({
+        id: `camp_${camp.id}`,
+        title: 'Campaign created',
+        description: `"${camp.title}" is currently ${camp.status.toLowerCase()}`,
+        time: formatRelativeTime(new Date(camp.createdAt)),
+        timestamp: new Date(camp.createdAt),
+        iconType: 'campaign',
+        href: `/brand/campaigns/${camp.id}`,
+        status: camp.status,
+      });
+    });
+
+    // Sort by timestamp desc and take top 15
+    activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    res.status(200).json({
+      data: {
+        activities: activities.slice(0, 15),
+        unreadCount: activities.filter((a) => {
+          const hoursAgo = (Date.now() - a.timestamp.getTime()) / (1000 * 60 * 60);
+          return hoursAgo < 24;
+        }).length,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+

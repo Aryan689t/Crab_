@@ -305,13 +305,51 @@ export async function acceptInvitation(req: Request, res: Response, next: NextFu
       });
     }
 
+    // 4. Create or reuse collaboration record idempotently
+    let collaboration = await prisma.collaboration.findFirst({
+      where: {
+        creatorId: creator.id,
+        brandId: brand.id,
+        ...(targetCampaignId ? { campaignId: targetCampaignId } : {}),
+      },
+    });
+
+    if (!collaboration) {
+      collaboration = await prisma.collaboration.create({
+        data: {
+          creatorId: creator.id,
+          brandId: brand.id,
+          campaignId: targetCampaignId || undefined,
+          conversationId: conversation.id,
+          status: 'AGREED',
+        },
+      });
+    } else if (collaboration.status === 'PROPOSED') {
+      collaboration = await prisma.collaboration.update({
+        where: { id: collaboration.id },
+        data: {
+          status: 'AGREED',
+          conversationId: conversation.id,
+        },
+      });
+    }
+
+    if (!conversation.collaborationId) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { collaborationId: collaboration.id },
+      }).catch(() => null);
+    }
+
     res.status(200).json({
       message: 'Invitation accepted successfully.',
       data: {
         requestId: id,
         status: 'ACCEPTED',
         conversationId: conversation.id,
+        collaborationId: collaboration.id,
         conversation,
+        collaboration,
       },
     });
   } catch (err) {
