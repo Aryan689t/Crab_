@@ -109,55 +109,195 @@ const INITIAL_MESSAGES: Message[] = [
   },
 ];
 
-export default function BrandInboxPage() {
-  const { user, loading: authLoading } = useAuth();
-  const [activeConv, setActiveConv] = useState(MOCK_CONVERSATIONS[0]);
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
+import { fetchApi } from '../../../lib/api';
+
+function BrandInboxContent() {
+  const searchParams = useSearchParams();
+  const targetConvId = searchParams.get('conversationId') || searchParams.get('id');
+  const targetCreator = searchParams.get('creator');
+  const { user, token, loading: authLoading } = useAuth();
+
+  const [dbConversations, setDbConversations] = useState<any[]>([]);
+  const [conversations, setConversations] = useState<any[]>(MOCK_CONVERSATIONS);
+  const [activeConv, setActiveConv] = useState<any>(MOCK_CONVERSATIONS[0]);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim()) return;
+  // 1. Fetch conversations list for brand
+  const loadConversations = async () => {
+    if (!token) return;
+    try {
+      const res = await fetchApi<{ data: any[] }>('/api/conversations', {}, token);
+      if (res?.data && Array.isArray(res.data)) {
+        setDbConversations(res.data);
+      }
+    } catch (err) {
+      console.warn('[BRAND_INBOX] Backend conversations fetch fallback:', err);
+    }
+  };
 
-    const newMsg: Message = {
+  useEffect(() => {
+    loadConversations();
+  }, [token]);
+
+  // Combine live PostgreSQL conversations with mock conversations
+  useEffect(() => {
+    if (dbConversations.length > 0) {
+      const mappedDb = dbConversations.map((c: any) => {
+        const creatorName = c.creator?.displayName || 'Creator Partner';
+        const creatorAvatar = creatorName.slice(0, 2).toUpperCase();
+        const lastMsg = c.messages?.[c.messages.length - 1];
+
+        return {
+          id: c.id,
+          creator: {
+            name: creatorName,
+            avatar: creatorAvatar,
+            handle: `@${creatorName.toLowerCase().replace(/\s+/g, '')}`,
+            niche: 'Developer & Cloud Tech',
+          },
+          campaign: {
+            name: c.campaign?.title || 'Brand Partnership',
+            id: c.campaign?.id || '',
+          },
+          lastMessage: lastMsg?.messageText || 'Started conversation',
+          time: lastMsg?.createdAt
+            ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'Active',
+          unread: 0,
+          status: 'ACTIVE',
+          messages: c.messages || [],
+        };
+      });
+
+      const dbIds = new Set(mappedDb.map((d: any) => d.id));
+      const extraMocks = MOCK_CONVERSATIONS.filter((m) => !dbIds.has(m.id));
+      const combined = [...mappedDb, ...extraMocks];
+      setConversations(combined);
+
+      // Auto-select based on conversationId or creator
+      if (targetConvId) {
+        const found = combined.find((c: any) => c.id === targetConvId);
+        if (found) setActiveConv(found);
+        else if (combined.length > 0) setActiveConv(combined[0]);
+      } else if (targetCreator) {
+        const found = combined.find((c: any) => c.creator?.id === targetCreator || c.creator?.name?.toLowerCase().includes(targetCreator.toLowerCase()));
+        if (found) setActiveConv(found);
+        else if (combined.length > 0) setActiveConv(combined[0]);
+      } else if (combined.length > 0 && (!activeConv || !combined.some((c: any) => c.id === activeConv.id))) {
+        setActiveConv(combined[0]);
+      }
+    }
+  }, [dbConversations, targetConvId, targetCreator]);
+
+  // 2. Load messages for active conversation
+  const loadActiveMessages = async () => {
+    if (!token || !activeConv) return;
+    if (activeConv.id.includes('-')) {
+      try {
+        const res = await fetchApi<{ data: any }>(`/api/conversations/${activeConv.id}`, {}, token);
+        if (res?.data?.messages) {
+          const mapped: Message[] = res.data.messages.map((m: any) => ({
+            id: m.id,
+            senderId: m.senderUserId === user?.id ? 'brand' : 'creator',
+            text: m.messageText,
+            time: m.createdAt
+              ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'Just now',
+            type: 'TEXT',
+          }));
+          setMessages(mapped);
+        }
+      } catch (err) {
+        console.warn('[BRAND_INBOX] Failed to poll messages:', err);
+      }
+    } else {
+      setMessages(INITIAL_MESSAGES);
+    }
+  };
+
+  useEffect(() => {
+    loadActiveMessages();
+  }, [activeConv?.id, token]);
+
+  // 3. Periodic polling (every 3.5 seconds) for live thread updates
+  useEffect(() => {
+    if (!token || !activeConv || !activeConv.id.includes('-')) return;
+    const interval = setInterval(() => {
+      loadActiveMessages();
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [activeConv?.id, token]);
+
+  // 4. Send Message Handler
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const textToSend = inputText.trim();
+    if (!textToSend || sending) return;
+
+    setInputText('');
+
+    const optimisticMsg: Message = {
       id: `msg_${Date.now()}`,
       senderId: 'brand',
-      text: inputText,
+      text: textToSend,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       type: 'TEXT',
     };
 
-    setMessages((prev) => [...prev, newMsg]);
-    setInputText('');
+    setMessages((prev) => [...prev, optimisticMsg]);
 
-    // Simulate creator typing & response
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `msg_${Date.now()}`,
-          senderId: 'creator',
-          text: 'Thanks for the details! I will incorporate this into the draft script.',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          type: 'TEXT',
-        },
-      ]);
-    }, 1800);
+    // Send to live API if database conversation
+    if (token && activeConv.id.includes('-')) {
+      setSending(true);
+      try {
+        await fetchApi(
+          `/api/conversations/${activeConv.id}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ messageText: textToSend }),
+          },
+          token
+        );
+        loadConversations();
+      } catch (err) {
+        console.warn('[BRAND_INBOX] Backend message persistence error:', err);
+      } finally {
+        setSending(false);
+      }
+    } else {
+      // Simulate reply for demo mock threads
+      setIsTyping(true);
+      setTimeout(() => {
+        setIsTyping(false);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg_${Date.now()}`,
+            senderId: 'creator',
+            text: 'Thanks for the details! I will incorporate this into the draft script.',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            type: 'TEXT',
+          },
+        ]);
+      }, 1800);
+    }
   };
 
-  const filteredConversations = MOCK_CONVERSATIONS.filter(
+  const filteredConversations = conversations.filter(
     (c) =>
-      c.creator.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.campaign.name.toLowerCase().includes(searchQuery.toLowerCase())
+      c.creator?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.campaign?.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -393,5 +533,19 @@ export default function BrandInboxPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function BrandInboxPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F8F6F2] flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-[#FF6B00] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <BrandInboxContent />
+    </Suspense>
   );
 }

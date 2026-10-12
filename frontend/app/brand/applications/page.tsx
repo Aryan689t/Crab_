@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../../lib/auth-context';
+import { fetchApi, invalidateApiCache } from '../../../lib/api';
 import { useMockStore } from '../../../mock/store';
 import Link from 'next/link';
 import {
@@ -18,14 +20,94 @@ import {
   DollarSign,
   Check,
   X,
+  Loader2,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 import { StarRating } from '../../../components/ui/StarRating';
 
 export default function BrandApplicationsPage() {
-  const { applications, updateApplicationStatus } = useMockStore();
+  const { user, token } = useAuth();
+  const { applications: mockApps, updateApplicationStatus: updateMockStatus } = useMockStore();
+  const [dbApps, setDbApps] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const loadBrandApplications = async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const res = await fetchApi<{ data: any[] }>('/api/brands/me/applications', {}, token);
+      if (res?.data) {
+        setDbApps(res.data);
+      }
+    } catch (err) {
+      console.warn('[BRAND_APPLICATIONS] Live fetch error, falling back to mock store:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBrandApplications();
+  }, [token]);
+
+  // Combined applications prioritizing database records
+  const applications = React.useMemo(() => {
+    if (dbApps.length > 0) {
+      const mappedDb = dbApps.map((a: any) => ({
+        id: a.id,
+        creatorId: a.creator?.id || 'creator_01',
+        creatorName: a.creator?.displayName || 'Creator Partner',
+        creatorHandle: a.creator?.socialAccounts?.[0]?.username || '@verifiedcreator',
+        creatorAvatar: a.creator?.profileImageUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        campaignId: a.campaign?.id || '',
+        campaignTitle: a.campaign?.title || 'Brand Campaign',
+        status: a.status || 'SUBMITTED',
+        proposedRate: Number(a.proposedRate) || a.campaign?.budgetMin || 35000,
+        matchScore: 92,
+        deliverablesSummary: '1 Dedicated Video Review + Pinned Comment',
+        note: a.pitch || '',
+        createdAt: a.createdAt || new Date().toISOString(),
+      }));
+
+      // Combine with extra mocks if needed
+      const dbIds = new Set(mappedDb.map((m: any) => m.id));
+      const extraMocks = mockApps.filter((m) => !dbIds.has(m.id));
+      return [...mappedDb, ...extraMocks];
+    }
+    return mockApps;
+  }, [dbApps, mockApps]);
+
+  const handleUpdateStatus = async (appId: string, newStatus: string) => {
+    setUpdatingId(appId);
+    try {
+      if (token) {
+        await fetchApi(
+          `/api/applications/${appId}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({ status: newStatus }),
+          },
+          token
+        );
+        invalidateApiCache('/applications');
+        invalidateApiCache('/brands');
+        invalidateApiCache('/campaigns');
+      }
+      // Update local state immediately
+      setDbApps((prev) =>
+        prev.map((a) => (a.id === appId ? { ...a, status: newStatus } : a))
+      );
+      updateMockStatus(appId, newStatus as any);
+    } catch (err) {
+      console.warn('[BRAND_APPLICATIONS] API update status error:', err);
+      updateMockStatus(appId, newStatus as any);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const filteredApps = applications.filter((app) => {
     const matchFilter = filter === 'ALL' || app.status === filter;
@@ -38,7 +120,7 @@ export default function BrandApplicationsPage() {
   });
 
   const submittedCount = applications.filter((a) => a.status === 'SUBMITTED').length;
-  const inDiscussionCount = applications.filter((a) => a.status === 'OFFER_RECEIVED').length;
+  const inDiscussionCount = applications.filter((a) => a.status === 'OFFER_RECEIVED' || a.status === 'UNDER_REVIEW').length;
   const acceptedCount = applications.filter((a) => a.status === 'ACCEPTED').length;
 
   return (
@@ -241,16 +323,22 @@ export default function BrandApplicationsPage() {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => updateApplicationStatus(app.id, 'ACCEPTED')}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs transition cursor-pointer flex items-center gap-1"
+                        disabled={updatingId === app.id}
+                        onClick={() => handleUpdateStatus(app.id, 'ACCEPTED')}
+                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-2xs transition cursor-pointer flex items-center gap-1.5"
                       >
-                        <Check className="w-3.5 h-3.5" />
+                        {updatingId === app.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
                         <span>Accept Proposal</span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => updateApplicationStatus(app.id, 'DECLINED')}
-                        className="px-3 py-2 rounded-xl bg-white hover:bg-rose-50 hover:text-rose-600 text-[#737373] text-xs font-semibold border border-[#E7E1DA] transition cursor-pointer"
+                        disabled={updatingId === app.id}
+                        onClick={() => handleUpdateStatus(app.id, 'DECLINED')}
+                        className="px-3 py-2 rounded-xl bg-white hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 text-[#737373] text-xs font-semibold border border-[#E7E1DA] transition cursor-pointer"
                       >
                         Decline
                       </button>
