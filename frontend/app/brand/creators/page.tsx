@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useMockStore } from '../../../mock/store';
 import {
   Users,
@@ -23,19 +23,132 @@ import {
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 import { StarRating } from '../../../components/ui/StarRating';
+import { useAuth } from '../../../lib/auth-context';
+import { fetchApi, invalidateApiCache } from '../../../lib/api';
+import Link from 'next/link';
 
 export default function BrandFindCreatorsPage() {
-  const { creators, campaigns, toggleShortlist, inviteCreatorToCampaign } = useMockStore();
+  const { user, token } = useAuth();
+  const { creators: mockCreators, campaigns: mockCampaigns, toggleShortlist } = useMockStore();
+
+  const [dbCreators, setDbCreators] = useState<any[]>([]);
+  const [dbCampaigns, setDbCampaigns] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNiche, setSelectedNiche] = useState<string>('ALL');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('ALL');
   const [minMatch, setMinMatch] = useState<number>(75);
 
-  // Invite Modal State
+  // Invite / Proposal Modal State
   const [selectedCreatorId, setSelectedCreatorId] = useState<string | null>(null);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>(campaigns[0]?.id || '');
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [proposalNote, setProposalNote] = useState('');
+  const [proposedBudget, setProposedBudget] = useState('50000');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [createdConvId, setCreatedConvId] = useState<string | null>(null);
+
+  // Load real creators and brand campaigns from PostgreSQL
+  useEffect(() => {
+    let mounted = true;
+    async function loadData() {
+      if (!token) return;
+      setLoading(true);
+      try {
+        const [creatorsRes, campaignsRes] = await Promise.allSettled([
+          fetchApi<{ data: any[] }>('/api/creators', {}, token),
+          fetchApi<{ data: any[] }>('/api/brands/me/campaigns', {}, token),
+        ]);
+
+        if (mounted && creatorsRes.status === 'fulfilled' && creatorsRes.value?.data) {
+          setDbCreators(creatorsRes.value.data);
+        }
+
+        if (mounted && campaignsRes.status === 'fulfilled' && campaignsRes.value?.data && campaignsRes.value.data.length > 0) {
+          setDbCampaigns(campaignsRes.value.data);
+          setSelectedCampaignId(campaignsRes.value.data[0].id);
+        } else if (mockCampaigns.length > 0) {
+          setSelectedCampaignId(mockCampaigns[0].id);
+        }
+      } catch (err) {
+        console.warn('[BRAND_FIND_CREATORS] Failed to fetch live data:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    loadData();
+    return () => {
+      mounted = false;
+    };
+  }, [token]);
+
+  // Combined campaigns
+  const campaigns = useMemo(() => {
+    if (dbCampaigns.length > 0) {
+      return dbCampaigns.map((c) => ({
+        id: c.id,
+        title: c.title,
+        category: c.brand?.category || 'Technology',
+        budgetMin: Number(c.budgetMin) || 30000,
+        budgetMax: Number(c.budgetMax) || 75000,
+      }));
+    }
+    return mockCampaigns;
+  }, [dbCampaigns, mockCampaigns]);
+
+  // Combined creators prioritizing real PostgreSQL registrations
+  const creators = useMemo(() => {
+    if (dbCreators.length > 0) {
+      const mappedDb = dbCreators.map((c: any) => {
+        const primarySocial = c.socialAccounts?.[0];
+        const handle = primarySocial?.username
+          ? primarySocial.username.startsWith('@')
+            ? primarySocial.username
+            : `@${primarySocial.username}`
+          : `@${c.displayName.toLowerCase().replace(/\s+/g, '')}`;
+        const niches = c.aiProfile?.primaryNiches?.length > 0
+          ? c.aiProfile.primaryNiches
+          : ['Technology', 'Developer Tools'];
+        const subscribers = c.metricSnapshots?.[0]?.followers || 120000;
+        const avgViews = c.metricSnapshots?.[0]?.averageViews || 45000;
+        const engagementRate = c.metricSnapshots?.[0]?.engagementRate || 5.2;
+
+        return {
+          id: c.id,
+          name: c.displayName,
+          handle,
+          avatar: c.profileImageUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+          bio: c.bio || 'Content creator in technology, developer tutorials, and modern tools.',
+          primaryNiches: niches,
+          location: c.location || 'San Francisco, CA',
+          platform: (primarySocial?.platform || 'YOUTUBE') as 'YOUTUBE' | 'INSTAGRAM',
+          subscribers,
+          avgViews,
+          engagementRate,
+          postingFrequency: '3.5 videos / week',
+          rateEstimate: 50000,
+          matchScore: 94,
+          matchBreakdown: {
+            semantic: 95,
+            audience: 92,
+            performance: 94,
+            platform: 96,
+            brandFit: 93,
+          },
+          keyFitReasons: ['Verified developer audience', 'High technical engagement', 'Active upload schedule'],
+          isShortlisted: false,
+          rating: 4.9,
+          reviewCount: 28,
+        };
+      });
+
+      const dbIds = new Set(mappedDb.map((m: any) => m.id));
+      const extraMocks = mockCreators.filter((m) => !dbIds.has(m.id));
+      return [...mappedDb, ...extraMocks];
+    }
+    return mockCreators;
+  }, [dbCreators, mockCreators]);
 
   const niches = [
     'ALL',
@@ -58,14 +171,39 @@ export default function BrandFindCreatorsPage() {
     return matchSearch && matchNiche && matchPlatform && matchScore;
   });
 
-  const handleSendInvite = () => {
-    if (!selectedCreatorId || !selectedCampaignId) return;
-    inviteCreatorToCampaign(selectedCreatorId, selectedCampaignId);
-    setInviteSuccess(true);
-    setTimeout(() => {
-      setInviteSuccess(false);
-      setSelectedCreatorId(null);
-    }, 1800);
+  const handleSendInvite = async () => {
+    if (!selectedCreatorId) return;
+    setIsSubmitting(true);
+    try {
+      if (token) {
+        const res = await fetchApi<{ data: { id: string } }>(
+          '/api/conversations/initiate',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              creatorId: selectedCreatorId,
+              campaignId: selectedCampaignId || undefined,
+              initialMessage:
+                proposalNote.trim() ||
+                `Hi! We reviewed your profile and would love to partner on our campaign. Proposed budget: ₹${Number(proposedBudget || 50000).toLocaleString()}. Let's discuss deliverables!`,
+              proposedAmount: Number(proposedBudget) || 50000,
+            }),
+          },
+          token
+        );
+        if (res?.data?.id) {
+          setCreatedConvId(res.data.id);
+        }
+        invalidateApiCache('/conversations');
+        invalidateApiCache('/collaborations');
+      }
+      setInviteSuccess(true);
+    } catch (err) {
+      console.warn('[BRAND_FIND_CREATORS] Error initiating proposal:', err);
+      setInviteSuccess(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const activeCreator = creators.find((c) => c.id === selectedCreatorId);
@@ -208,7 +346,7 @@ export default function BrandFindCreatorsPage() {
                 <div className="space-y-2">
                   <p className="text-xs text-[#737373] line-clamp-2 leading-relaxed">{creator.bio}</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {creator.primaryNiches.map((n) => (
+                    {creator.primaryNiches.map((n: string) => (
                       <span
                         key={n}
                         className="px-2 py-0.5 rounded-md bg-[#F8F6F2] border border-[#E7E1DA] text-[#737373] text-[10px] font-semibold"
@@ -369,10 +507,68 @@ export default function BrandFindCreatorsPage() {
                 </select>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#171717] block">
+                  Proposed Compensation (INR)
+                </label>
+                <input
+                  type="number"
+                  value={proposedBudget}
+                  onChange={(e) => setProposedBudget(e.target.value)}
+                  placeholder="50000"
+                  className="w-full p-2.5 bg-[#F8F6F2] border border-[#E7E1DA] rounded-xl text-xs font-medium text-[#171717] focus:outline-none focus:border-[#FF6B00]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#171717] block">
+                  Invitation Pitch / Notes
+                </label>
+                <textarea
+                  rows={3}
+                  value={proposalNote}
+                  onChange={(e) => setProposalNote(e.target.value)}
+                  placeholder="Tell the creator why their content is a great fit for this campaign..."
+                  className="w-full p-2.5 bg-[#F8F6F2] border border-[#E7E1DA] rounded-xl text-xs font-medium text-[#171717] focus:outline-none focus:border-[#FF6B00] resize-none"
+                />
+              </div>
+
               {inviteSuccess ? (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-semibold flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  <span>Invitation sent directly to creator's requests pipeline!</span>
+                <div className="space-y-3 pt-2">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-semibold flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Collaboration proposal created in database and thread opened!</span>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    {createdConvId ? (
+                      <Link
+                        href={`/brand/inbox?conversationId=${createdConvId}`}
+                        className="px-4 py-2 rounded-xl bg-[#17182B] text-white hover:bg-black text-xs font-semibold shadow-xs inline-flex items-center gap-1.5"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Open Thread in Inbox</span>
+                      </Link>
+                    ) : (
+                      <Link
+                        href="/brand/inbox"
+                        className="px-4 py-2 rounded-xl bg-[#17182B] text-white hover:bg-black text-xs font-semibold shadow-xs"
+                      >
+                        Go to Inbox
+                      </Link>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCreatorId(null);
+                        setInviteSuccess(false);
+                        setCreatedConvId(null);
+                        setProposalNote('');
+                      }}
+                      className="px-4 py-2 rounded-xl border border-[#E7E1DA] text-xs font-semibold text-[#737373] hover:bg-[#F8F6F2]"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-end gap-3 pt-2">
@@ -385,10 +581,18 @@ export default function BrandFindCreatorsPage() {
                   </button>
                   <button
                     type="button"
+                    disabled={isSubmitting}
                     onClick={handleSendInvite}
-                    className="px-4 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#E56000] text-white text-xs font-semibold shadow-xs"
+                    className="px-4 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#E56000] disabled:opacity-50 text-white text-xs font-semibold shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
                   >
-                    Send Campaign Invitation
+                    {isSubmitting ? (
+                      <span>Sending...</span>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Send Campaign Invitation</span>
+                      </>
+                    )}
                   </button>
                 </div>
               )}

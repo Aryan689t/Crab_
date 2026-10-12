@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../lib/auth-context';
@@ -115,13 +115,61 @@ const REQUESTS_DATA: RequestItem[] = [
 export default function CreatorRequestsPage() {
   const router = useRouter();
   const { user, token } = useAuth();
+  const [dbRequests, setDbRequests] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<string>('All Requests');
-  const [selectedReqId, setSelectedReqId] = useState<string>(REQUESTS_DATA[0].id);
+  const [selectedReqId, setSelectedReqId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [acceptedIds, setAcceptedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function loadRequests() {
+      if (!token) return;
+      try {
+        const res = await fetchApi<{ data: any[] }>('/api/conversations', {}, token);
+        if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+          setDbRequests(res.data);
+          setSelectedReqId(res.data[0].id);
+        } else {
+          setSelectedReqId(REQUESTS_DATA[0].id);
+        }
+      } catch (err) {
+        console.warn('[CREATOR_REQUESTS] Could not load live requests:', err);
+        setSelectedReqId(REQUESTS_DATA[0].id);
+      }
+    }
+    loadRequests();
+  }, [token]);
+
+  const allRequests: RequestItem[] = React.useMemo(() => {
+    if (dbRequests.length > 0) {
+      const mappedDb: RequestItem[] = dbRequests.map((c: any) => {
+        const brandName = c.brand?.name || 'Partner Brand';
+        const campaignTitle = c.campaign?.title || 'Direct Brand Collaboration';
+        const firstMsg = c.messages?.[0]?.messageText || 'Brand sent you a collaboration proposal!';
+        const budgetStr = c.campaign?.budgetMin ? `₹${Number(c.campaign.budgetMin).toLocaleString()}` : '₹50,000';
+        return {
+          id: c.id,
+          brand: brandName,
+          title: campaignTitle,
+          logoBg: '#17182B',
+          logoText: '#FF6B00',
+          status: 'New',
+          isNew: true,
+          timeAgo: 'Just now',
+          budget: budgetStr,
+          deliverables: '1 Dedicated Video Breakdown',
+          snippet: firstMsg,
+        };
+      });
+      const dbIds = new Set(mappedDb.map((r) => r.id));
+      const extraMocks = REQUESTS_DATA.filter((r) => !dbIds.has(r.id));
+      return [...mappedDb, ...extraMocks];
+    }
+    return REQUESTS_DATA;
+  }, [dbRequests]);
 
   const handleAcceptAndOpenThread = async (reqItem: RequestItem) => {
     if (acceptingId) return;
@@ -131,6 +179,13 @@ export default function CreatorRequestsPage() {
     try {
       if (!token) {
         throw new Error('Please sign in to accept invitations.');
+      }
+
+      if (reqItem.id.includes('-')) {
+        // Already a live database conversation
+        setAcceptedIds((prev) => [...prev, reqItem.id]);
+        router.push(`/creator/inbox?conversationId=${reqItem.id}`);
+        return;
       }
 
       const res = await fetchApi<{
@@ -167,13 +222,13 @@ export default function CreatorRequestsPage() {
   };
 
   const TABS = [
-    { label: 'All Requests', count: REQUESTS_DATA.length },
-    { label: 'New', count: REQUESTS_DATA.filter((r) => r.status === 'New').length },
-    { label: 'In Discussion', count: REQUESTS_DATA.filter((r) => r.status === 'In Discussion').length },
-    { label: 'Offer Received', count: REQUESTS_DATA.filter((r) => r.status === 'Offer Received').length },
+    { label: 'All Requests', count: allRequests.length },
+    { label: 'New', count: allRequests.filter((r) => r.status === 'New').length },
+    { label: 'In Discussion', count: allRequests.filter((r) => r.status === 'In Discussion').length },
+    { label: 'Offer Received', count: allRequests.filter((r) => r.status === 'Offer Received').length },
   ];
 
-  const filteredRequests = REQUESTS_DATA.filter((req) => {
+  const filteredRequests = allRequests.filter((req) => {
     const matchesTab = activeTab === 'All Requests' || req.status === activeTab;
     const matchesSearch =
       searchQuery.trim() === '' ||
@@ -183,7 +238,7 @@ export default function CreatorRequestsPage() {
   });
 
   const selectedReq =
-    REQUESTS_DATA.find((r) => r.id === selectedReqId) || filteredRequests[0] || REQUESTS_DATA[0];
+    allRequests.find((r) => r.id === selectedReqId) || filteredRequests[0] || allRequests[0];
 
   const handleAction = (type: 'accept' | 'decline') => {
     if (type === 'accept') {

@@ -318,3 +318,138 @@ export async function acceptInvitation(req: Request, res: Response, next: NextFu
     next(err);
   }
 }
+
+/**
+ * POST /api/conversations/initiate
+ * (and POST /api/conversations)
+ * Brand initiates a conversation / collaboration proposal with a creator.
+ * Role required: BRAND.
+ */
+export async function initiateConversation(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized', message: 'Authentication required.' });
+      return;
+    }
+
+    const { creatorId, campaignId, initialMessage, message, proposedAmount, budget } = req.body || {};
+    if (!creatorId) {
+      res.status(400).json({ error: 'BadRequest', message: 'Creator ID is required to initiate a conversation.' });
+      return;
+    }
+
+    // Identify brand profile
+    const brand = await prisma.brand.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, name: true, userId: true },
+    });
+
+    if (!brand) {
+      res.status(404).json({ error: 'BrandNotFound', message: 'No brand profile found for current user.' });
+      return;
+    }
+
+    // Identify target creator profile
+    const creator = await prisma.creator.findUnique({
+      where: { id: creatorId },
+      include: {
+        user: { select: { id: true, email: true } },
+      },
+    });
+
+    if (!creator) {
+      res.status(404).json({ error: 'CreatorNotFound', message: 'Target creator profile not found.' });
+      return;
+    }
+
+    const msgContent = String(initialMessage || message || `Hi ${creator.displayName}, we reviewed your profile and would love to collaborate on our campaign! Let's align on details here.`).trim();
+    const parsedAmount = proposedAmount ? Number(proposedAmount) : budget ? Number(String(budget).replace(/[^0-9.]/g, '')) : undefined;
+
+    // Check for existing conversation between this brand and creator
+    let conversation = await prisma.conversation.findFirst({
+      where: {
+        creatorId: creator.id,
+        brandId: brand.id,
+        ...(campaignId ? { campaignId } : {}),
+      },
+      include: {
+        brand: { select: { id: true, name: true, category: true, userId: true } },
+        creator: { select: { id: true, displayName: true, profileImageUrl: true, userId: true } },
+        campaign: { select: { id: true, title: true, budgetMin: true, budgetMax: true } },
+        messages: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+
+    if (!conversation) {
+      conversation = await prisma.$transaction(async (tx) => {
+        const newConv = await tx.conversation.create({
+          data: {
+            creatorId: creator.id,
+            brandId: brand.id,
+            campaignId: campaignId || undefined,
+          },
+          include: {
+            brand: { select: { id: true, name: true, category: true, userId: true } },
+            creator: { select: { id: true, displayName: true, profileImageUrl: true, userId: true } },
+            campaign: { select: { id: true, title: true, budgetMin: true, budgetMax: true } },
+            messages: true,
+          },
+        });
+
+        // Create collaboration proposal in PostgreSQL
+        const collab = await tx.collaboration.create({
+          data: {
+            creatorId: creator.id,
+            brandId: brand.id,
+            campaignId: campaignId || undefined,
+            conversationId: newConv.id,
+            agreedAmount: parsedAmount ? parsedAmount : undefined,
+            status: 'PROPOSED',
+          },
+        });
+
+        await tx.conversation.update({
+          where: { id: newConv.id },
+          data: { collaborationId: collab.id },
+        });
+
+        const firstMsg = await tx.message.create({
+          data: {
+            conversationId: newConv.id,
+            senderUserId: req.user!.id,
+            messageText: msgContent,
+          },
+        });
+
+        return {
+          ...newConv,
+          collaborationId: collab.id,
+          messages: [firstMsg],
+        };
+      });
+    } else {
+      // Append new message if provided
+      if (msgContent) {
+        const appended = await prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            senderUserId: req.user.id,
+            messageText: msgContent,
+          },
+        });
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { updatedAt: new Date() },
+        });
+        conversation.messages.push(appended as any);
+      }
+    }
+
+    res.status(200).json({
+      message: 'Conversation and collaboration proposal initiated successfully.',
+      data: conversation,
+    });
+  } catch (err) {
+    next(err);
+  }
+}

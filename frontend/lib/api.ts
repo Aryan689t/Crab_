@@ -73,7 +73,13 @@ export async function fetchApi<T>(
 ): Promise<T> {
   const method = (options.method || 'GET').toUpperCase();
   const isGet = method === 'GET';
-  const isCacheable = isGet && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register');
+  const isCacheable =
+    isGet &&
+    !endpoint.includes('/auth/login') &&
+    !endpoint.includes('/auth/register') &&
+    !endpoint.includes('/conversations') &&
+    !endpoint.includes('/messages') &&
+    options.cache !== 'no-store';
 
   const cacheKey = getCacheKey(endpoint, token);
   const now = Date.now();

@@ -5,6 +5,7 @@ import {
   getCreatorPublicProfile,
   getCreatorMetrics,
   completeCreatorOnboarding,
+  listCreators,
 } from '../controllers/creatorController.js';
 import { getMyCreatorApplications } from '../controllers/applicationController.js';
 import { getMyCreatorCollaborations } from '../controllers/collaborationController.js';
@@ -20,6 +21,9 @@ import {
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 
 export const creatorRouter = Router();
+
+// Discover creators (for brands)
+creatorRouter.get('/', authenticateToken, listCreators);
 
 // Current authenticated creator profile
 creatorRouter.get('/me', authenticateToken, requireRole('CREATOR'), getCreatorProfile);

@@ -479,3 +479,71 @@ export async function completeCreatorOnboarding(req: Request, res: Response, nex
     next(err);
   }
 }
+
+/**
+ * GET /api/creators
+ * Lists all registered creators for brand discovery.
+ * Includes social accounts, AI intelligence profiles, recent content, and metrics.
+ */
+export async function listCreators(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const creators = await prisma.creator.findMany({
+      include: {
+        user: {
+          select: { id: true, email: true },
+        },
+        socialAccounts: {
+          select: {
+            id: true,
+            platform: true,
+            username: true,
+            status: true,
+            authorizationReference: true,
+          },
+        },
+        aiProfile: {
+          select: {
+            id: true,
+            primaryNiches: true,
+            secondaryNiches: true,
+            contentStyle: true,
+            audienceSummary: true,
+            commercialCategories: true,
+            brandSuitability: true,
+            confidenceData: true,
+          },
+        },
+        metricSnapshots: {
+          orderBy: { recordedAt: 'desc' },
+          take: 1,
+          select: {
+            followers: true,
+            averageViews: true,
+            engagementRate: true,
+            postingFrequency: true,
+          },
+        },
+        contents: {
+          orderBy: { publishedAt: 'desc' },
+          take: 3,
+          select: {
+            id: true,
+            platform: true,
+            title: true,
+            permalink: true,
+            views: true,
+            publishedAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.status(200).json({
+      data: creators,
+      meta: { total: creators.length },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
