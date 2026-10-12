@@ -4,7 +4,9 @@ import {
     type CreatorIntelligenceInput,
 } from '../integrations/gemini/index.js';
 
-const MODEL_VERSION = 'gemini-3.8-flash';
+import { config } from '../config/env.js';
+
+const MODEL_VERSION = config.gemini.model || 'gemini-2.5-flash';
 
 export class DatabasePersistenceError extends Error {
     readonly cause?: unknown;

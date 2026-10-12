@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 import { config } from '../../config/env.js';
 
-const MODEL = 'gemini-3.8-flash';
+const MODEL = config.gemini.model || 'gemini-2.5-flash';
 const MAX_RETRIES = 2;
 const INITIAL_BACKOFF_MS = 1000;
 

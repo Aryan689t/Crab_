@@ -41,6 +41,7 @@ healthRouter.get('/', async (req: Request, res: Response) => {
       pgvector: pgvectorStatus,
       supabaseAuth: supabaseStatus,
       geminiAi: config.gemini.apiKey ? 'configured' : 'unconfigured',
+      geminiModel: config.gemini.model || 'gemini-2.5-flash',
       razorpay: config.razorpay.keyId ? 'configured' : 'unconfigured',
     },
   });

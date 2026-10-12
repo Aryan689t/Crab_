@@ -7,7 +7,9 @@ import { DatabasePersistenceError } from './creatorIntelligenceService.js';
 
 export { DatabasePersistenceError };
 
-const MODEL_VERSION = 'gemini-3.8-flash';
+import { config } from '../config/env.js';
+
+const MODEL_VERSION = config.gemini.model || 'gemini-2.5-flash';
 
 export async function analyzeAndSaveCampaignIntelligence(
     campaignId: string,
