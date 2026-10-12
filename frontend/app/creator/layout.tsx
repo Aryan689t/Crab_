@@ -10,16 +10,16 @@ export default function CreatorLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user } = useAuth();
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-[#F8F6F2]">
       {/* Sidebar */}
       <CreatorSidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative bg-[#F8F6F2]">
 
         {/* Scrollable Page Content */}
         <div className="flex-1 overflow-y-auto">
