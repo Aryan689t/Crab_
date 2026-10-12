@@ -24,7 +24,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password?: string, role?: UserRole) => Promise<void>;
   signup: (email: string, password?: string, role?: UserRole, displayName?: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateUser: (updatedData: Partial<UserProfile>) => void;
   refreshUser: () => Promise<void>;
 }
@@ -237,7 +237,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (e) {
+      console.warn('[AUTH] Error during supabase signOut:', e);
+    }
     invalidateApiCache();
     setUser(null);
     setToken(null);

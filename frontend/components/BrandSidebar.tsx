@@ -38,6 +38,7 @@ export function BrandSidebar({ isOpen, setIsOpen }: BrandSidebarProps) {
   ];
 
   const bottomItems = [
+    { label: 'Settings', href: '/brand/settings', icon: Settings },
     { label: 'Brand Profile', href: '/brand/profile', icon: Building2 },
   ];
 
@@ -109,7 +110,7 @@ export function BrandSidebar({ isOpen, setIsOpen }: BrandSidebarProps) {
           </nav>
         </div>
 
-        {/* Bottom Profile, Settings & Logout */}
+        {/* Bottom Navigation: Settings directly above Brand Profile */}
         <div className="flex flex-col gap-1 pt-4 border-t border-[#E7E1DA]">
           {bottomItems.map((item) => {
             const Icon = item.icon;
@@ -135,15 +136,6 @@ export function BrandSidebar({ isOpen, setIsOpen }: BrandSidebarProps) {
               </Link>
             );
           })}
-
-          <button
-            type="button"
-            onClick={logout}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-[#737373] hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer text-left"
-          >
-            <LogOut className="w-4 h-4 shrink-0" />
-            <span>Sign Out</span>
-          </button>
         </div>
       </SidebarBody>
     </Sidebar>

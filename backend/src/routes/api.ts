@@ -9,6 +9,7 @@ import { applicationRouter } from './applications.js';
 import { conversationRouter } from './conversations.js';
 import { requestRouter } from './requests.js';
 import { collaborationRouter } from './collaborations.js';
+import { uploadRouter } from './upload.js';
 
 export const apiRouter = Router();
 
@@ -25,6 +26,7 @@ apiRouter.use('/conversations', conversationRouter);
 apiRouter.use('/conversation', conversationRouter);
 apiRouter.use('/requests', requestRouter);
 apiRouter.use('/invitations', requestRouter);
+apiRouter.use('/upload', uploadRouter);
 
 // Base route for API metadata
 apiRouter.get('/', (req, res) => {

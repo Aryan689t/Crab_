@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../../lib/auth-context';
+import { fetchApi } from '../../../lib/api';
 import {
   Building2,
   Globe,
@@ -18,21 +19,50 @@ import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 import { StarRating } from '../../../components/ui/StarRating';
 
 export default function BrandProfilePage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
 
   const [profile, setProfile] = useState({
-    name: 'Acme Cloud',
-    description: 'Developer tools, cloud infrastructure, and AI engineering solutions.',
-    category: 'Technology & Cloud',
-    website: 'https://acmecloud.example.com',
-    email: 'partnerships@acmecloud.example.com',
+    name: user?.displayName || 'My Brand',
+    description: '',
+    category: 'Technology',
+    website: '',
+    email: user?.email || '',
     location: 'Bengaluru, India',
     targetMarkets: ['India', 'Global', 'North America'],
     selectedNiches: ['Cloud Architecture', 'DevOps', 'Software Engineering', 'AI Tools'],
   });
+
+  useEffect(() => {
+    let mounted = true;
+    const loadProfile = async () => {
+      if (!token) return;
+      try {
+        const res = await fetchApi<{ data: any }>('/api/brands/me', {}, token);
+        if (mounted && res?.data) {
+          const d = res.data;
+          setProfile({
+            name: d.name || user?.displayName || 'My Brand',
+            description: d.description || '',
+            category: d.category || 'Technology',
+            website: d.website || '',
+            email: d.contactInformation?.email || user?.email || '',
+            location: d.location || 'Bengaluru, India',
+            targetMarkets: d.targetMarkets || ['India', 'Global'],
+            selectedNiches: d.preferences?.niches || ['Cloud Architecture', 'DevOps', 'Software Engineering'],
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load brand profile, using current session:', err);
+      }
+    };
+    loadProfile();
+    return () => {
+      mounted = false;
+    };
+  }, [token, user]);
 
   const availableNiches = [
     'Cloud Architecture',
@@ -56,16 +86,34 @@ export default function BrandProfilePage() {
     });
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setSuccess(false);
 
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      if (token) {
+        await fetchApi('/api/brands/me', {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: profile.name,
+            description: profile.description,
+            category: profile.category,
+            website: profile.website,
+            location: profile.location,
+            targetMarkets: profile.targetMarkets,
+            contactInformation: { email: profile.email },
+            preferences: { niches: profile.selectedNiches },
+          }),
+        }, token);
+      }
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    }, 800);
+    } catch (err: any) {
+      alert(err.message || 'Failed to save brand profile');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

@@ -20,6 +20,8 @@ const createCampaignSchema = z.object({
   timeline: z.any().optional().nullable(),
   exclusivity: z.string().optional().nullable(),
   usageRights: z.string().optional().nullable(),
+  coverImage: z.string().optional().nullable(),
+  posterUrl: z.string().optional().nullable(),
   status: z.enum(['DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED']).optional().default('ACTIVE'),
 });
 
@@ -182,6 +184,7 @@ export async function createCampaign(req: Request, res: Response, next: NextFunc
         timeline: parsed.timeline || {},
         exclusivity: parsed.exclusivity || null,
         usageRights: parsed.usageRights || null,
+        coverImage: parsed.coverImage || parsed.posterUrl || (parsed.timeline as any)?.posterUrl || (parsed.timeline as any)?.coverImage || null,
         status: parsed.status,
       },
       include: {

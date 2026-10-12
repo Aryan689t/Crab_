@@ -118,7 +118,10 @@ export default function BrandCampaignsListPage() {
       niches: c.creatorNiche ? c.creatorNiche.split(',').map((s: string) => s.trim()) : ['Developer Tools'],
       status: (c.status || 'ACTIVE') as any,
       creatorsCount: 2,
-      coverImage: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format&fit=crop',
+      coverImage:
+        c.coverImage ||
+        c.cover_image ||
+        'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format&fit=crop',
     }));
   }, [dbCampaigns]);
 

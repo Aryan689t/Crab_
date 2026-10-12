@@ -263,6 +263,7 @@ model Campaign {
   timeline          Json?
   exclusivity       String?
   usageRights       String?            @map("usage_rights")
+  coverImage        String?            @map("cover_image")
   status            CampaignStatus     @default(DRAFT)
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")

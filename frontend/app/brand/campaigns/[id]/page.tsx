@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { AppShell } from '../../../../components/layout/AppShell';
+import { PortalPageHeader } from '../../../../components/creator/PortalPageHeader';
 import { useMockStore } from '../../../../mock/store';
 import { useAuth } from '../../../../lib/auth-context';
 import { fetchApi, invalidateApiCache } from '../../../../lib/api';
@@ -118,6 +117,7 @@ export default function CampaignWorkspacePage({
         budgetMin: Number(apiCampaign.budgetMin) || mockFallback.budgetMin,
         budgetMax: Number(apiCampaign.budgetMax) || mockFallback.budgetMax,
         status: apiCampaign.status || mockFallback.status,
+        coverImage: apiCampaign.coverImage || apiCampaign.cover_image || mockFallback.coverImage,
         timeline:
           typeof apiCampaign.timeline === 'object' && apiCampaign.timeline?.display
             ? apiCampaign.timeline.display
@@ -126,7 +126,7 @@ export default function CampaignWorkspacePage({
             : mockFallback.timeline,
         objective: apiCampaign.objective || apiCampaign.description || mockFallback.objective,
         deliverables:
-          typeof apiCampaign.timeline === 'object' && apiCampaign.timeline?.deliverables
+          typeof apiCampaign.timeline === 'object' && Array.isArray(apiCampaign.timeline?.deliverables)
             ? apiCampaign.timeline.deliverables
             : mockFallback.deliverables,
         requiredReach: apiCampaign.requiredReach || mockFallback.requiredReach || 40000,
@@ -162,37 +162,42 @@ export default function CampaignWorkspacePage({
   }, [apiApps, applications, campaign.id, campaign.title, campaign.budgetMin]);
 
   return (
-    <AppShell
-      title={campaign.title}
-      subtitle={`Campaign Workspace • ${campaign.brandName} • Budget: ₹${campaign.budgetMin?.toLocaleString()} - ₹${campaign.budgetMax?.toLocaleString()}`}
-    >
-      {/* Top Breadcrumb & Status Bar */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/brand/campaigns"
-          className="inline-flex items-center space-x-2 text-xs font-semibold text-[#626782] hover:text-[#17182B] transition"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to All Campaigns</span>
-        </Link>
-
-        <div className="flex items-center space-x-2">
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 flex items-center space-x-1">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Active Sprint</span>
-          </span>
+    <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {/* Top Breadcrumb & Status Bar */}
+        <div className="flex items-center justify-between">
           <Link
-            href="/brand/creators"
-            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-[#F4511E] hover:bg-[#D94316] text-white text-xs font-semibold shadow-sm transition"
+            href="/brand/campaigns"
+            className="inline-flex items-center space-x-2 text-xs font-semibold text-[#737373] hover:text-[#171717] transition"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Invite More Creators</span>
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to All Campaigns</span>
           </Link>
-        </div>
-      </div>
 
-      {/* Campaign Workspace Tabs */}
-      <div className="flex items-center space-x-2 border-b border-[#E7E8F0] pb-2">
+          <div className="flex items-center space-x-2">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 flex items-center space-x-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Active Sprint</span>
+            </span>
+            <Link
+              href="/brand/creators"
+              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-[#FF6B00] hover:bg-[#E56000] text-white text-xs font-semibold shadow-xs transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Invite More Creators</span>
+            </Link>
+          </div>
+        </div>
+
+        {/* Unified Page Header */}
+        <PortalPageHeader
+          eyebrow="Campaign Workspace"
+          titlePrefix={campaign.title}
+          description={`${campaign.brandName} • Budget: ₹${campaign.budgetMin?.toLocaleString()} - ₹${campaign.budgetMax?.toLocaleString()}`}
+        />
+
+        {/* Campaign Workspace Tabs */}
+        <div className="flex items-center space-x-2 border-b border-[#E7E1DA] pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('overview')}
           className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
@@ -298,16 +303,30 @@ export default function CampaignWorkspacePage({
             </div>
           </div>
 
-          {/* AI Brief Summary Box */}
-          <div className="bg-white rounded-2xl p-6 border border-[#E7E8F0] shadow-sm space-y-3">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E7E8F0]">
-              <span className="text-xs font-bold text-[#17182B] flex items-center space-x-1.5">
-                <Sparkles className="w-4 h-4 text-[#8580E8]" />
-                <span>AI Brief Interpretation</span>
-              </span>
-              <span className="text-[11px] text-[#8B90A5]">pgvector campaign ID: {campaign.id}</span>
+          {/* Campaign Poster & AI Brief Summary Box */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+            {campaign.coverImage && (
+              <div className="bg-white rounded-2xl p-4 border border-[#E7E1DA] shadow-xs space-y-2">
+                <div className="text-xs font-bold text-[#171717]">Campaign Poster</div>
+                <div className="w-full h-48 rounded-xl overflow-hidden bg-black/5 border border-[#E7E1DA]">
+                  <img
+                    src={campaign.coverImage}
+                    alt={campaign.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+            )}
+            <div className={`bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs space-y-3 ${campaign.coverImage ? 'md:col-span-2' : 'md:col-span-3'}`}>
+              <div className="flex items-center justify-between pb-3 border-b border-[#E7E1DA]">
+                <span className="text-xs font-bold text-[#171717] flex items-center space-x-1.5">
+                  <Sparkles className="w-4 h-4 text-[#FF6B00]" />
+                  <span>AI Brief Interpretation</span>
+                </span>
+                <span className="text-[11px] text-[#737373]">pgvector campaign ID: {campaign.id}</span>
+              </div>
+              <p className="text-xs text-[#525252] leading-relaxed">{campaign.aiBriefSummary || campaign.objective}</p>
             </div>
-            <p className="text-xs text-[#626782] leading-relaxed">{campaign.aiBriefSummary || campaign.objective}</p>
           </div>
         </div>
       )}
@@ -496,6 +515,7 @@ export default function CampaignWorkspacePage({
           </div>
         </div>
       )}
-    </AppShell>
+      </main>
+    </div>
   );
 }
