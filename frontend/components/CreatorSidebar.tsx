@@ -27,9 +27,8 @@ export function CreatorSidebar({ isOpen, setIsOpen }: CreatorSidebarProps) {
 
   const navItems = [
     { label: 'Overview', href: '/creator/dashboard', icon: Home },
-    { label: 'Discover', href: '/creator/opportunities', icon: Search },
-    { label: 'Applications', href: '/creator/applications', icon: FileText },
-    { label: 'Requests', href: '/creator/requests', icon: Mail, badge: '5' },
+    { label: 'Discover', href: '/creator/discover', icon: Search },
+    { label: 'Opportunities', href: '/creator/opportunities', icon: Mail, badge: '8' },
     { label: 'Collaborations', href: '/creator/collaborations', icon: Users },
     { label: 'Inbox', href: '/creator/inbox', icon: MessageSquare, badge: '3' },
     { label: 'Intelligence', href: '/creator/intelligence', icon: Sparkles },

@@ -28,8 +28,8 @@ export function Sidebar() {
 
   const creatorNavItems = [
     { label: 'Dashboard', href: '/creator/dashboard', icon: LayoutDashboard },
-    { label: 'Discover Opportunities', href: '/creator/opportunities', icon: Compass },
-    { label: 'Applications', href: '/creator/applications', icon: FileText },
+    { label: 'Discover', href: '/creator/discover', icon: Compass },
+    { label: 'Opportunities', href: '/creator/opportunities', icon: MessageSquare },
     { label: 'AI Intelligence', href: '/creator/intelligence', icon: Sparkles },
     { label: 'Profile & Rate Cards', href: '/creator/profile', icon: User },
   ];

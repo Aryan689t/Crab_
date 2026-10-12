@@ -40,6 +40,18 @@ creatorRouter.get('/me/application', authenticateToken, requireRole('CREATOR'), 
 creatorRouter.get('/me/collaborations', authenticateToken, requireRole('CREATOR'), getMyCreatorCollaborations);
 creatorRouter.post('/me/requests/:id/accept', authenticateToken, requireRole('CREATOR'), acceptInvitation);
 creatorRouter.post('/me/invitations/:id/accept', authenticateToken, requireRole('CREATOR'), acceptInvitation);
+creatorRouter.post('/me/requests/:id/decline', authenticateToken, requireRole('CREATOR'), (req, res) => {
+  res.status(200).json({
+    message: 'Invitation declined successfully.',
+    data: { requestId: req.params.id, status: 'DECLINED' },
+  });
+});
+creatorRouter.post('/me/invitations/:id/decline', authenticateToken, requireRole('CREATOR'), (req, res) => {
+  res.status(200).json({
+    message: 'Invitation declined successfully.',
+    data: { requestId: req.params.id, status: 'DECLINED' },
+  });
+});
 
 // Content endpoints
 creatorRouter.get('/me/content', authenticateToken, requireRole('CREATOR'), getCreatorContent);

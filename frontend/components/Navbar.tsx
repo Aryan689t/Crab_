@@ -23,8 +23,8 @@ export function Navbar() {
 
   const creatorNav = [
     { name: 'Dashboard', href: '/creator/dashboard', icon: LayoutDashboard },
-    { name: 'Discover', href: '/creator/opportunities', icon: Compass },
-    { name: 'Applications', href: '/creator/applications', icon: FileText },
+    { name: 'Discover', href: '/creator/discover', icon: Compass },
+    { name: 'Opportunities', href: '/creator/opportunities', icon: FileText },
     { name: 'Collaborations', href: '/creator/collaborations', icon: User },
     { name: 'Inbox', href: '/creator/inbox', icon: MessageSquare },
     { name: 'Intelligence', href: '/creator/intelligence', icon: Sparkles },

@@ -62,7 +62,7 @@ export function RecentActivityList({
             </h3>
           </div>
           <Link
-            href="/creator/applications"
+            href="/creator/opportunities"
             className="text-xs text-[#FF6B00] font-medium hover:underline inline-flex items-center gap-1"
           >
             <span>View all</span>
