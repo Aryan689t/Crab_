@@ -154,9 +154,27 @@ export default function CreatorOpportunitiesPage() {
     });
   }, [campaigns, activeCategory, sortBy, searchQuery]);
 
-  const handleApply = (e: React.FormEvent) => {
+  const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCampaign) return;
+
+    if (token) {
+      try {
+        await fetchApi(
+          `/api/campaigns/${selectedCampaign.id}/applications`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              pitch: pitchNote,
+              proposedRate: selectedCampaign.budgetMin || 25000,
+            }),
+          },
+          token
+        );
+      } catch (err) {
+        console.warn('[OPPORTUNITIES] Backend apply submission fallback:', err);
+      }
+    }
 
     applyToCampaign(selectedCampaign.id, 'creator_01', pitchNote);
     setApplySuccess(true);

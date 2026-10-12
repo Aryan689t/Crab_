@@ -5,6 +5,7 @@ import { creatorRouter } from './creators.js';
 import { brandRouter } from './brands.js';
 import { campaignRouter } from './campaigns.js';
 import { socialRouter } from './social.js';
+import { applicationRouter } from './applications.js';
 
 export const apiRouter = Router();
 
@@ -14,6 +15,8 @@ apiRouter.use('/creators', creatorRouter);
 apiRouter.use('/brands', brandRouter);
 apiRouter.use('/campaigns', campaignRouter);
 apiRouter.use('/social', socialRouter);
+apiRouter.use('/applications', applicationRouter);
+apiRouter.use('/application', applicationRouter);
 
 // Base route for API metadata
 apiRouter.get('/', (req, res) => {

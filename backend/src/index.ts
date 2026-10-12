@@ -52,8 +52,9 @@ app.use((req, res) => {
 // Centralized error handler
 app.use(errorHandler);
 
-// Start server
-if (process.env.NODE_ENV !== 'test') {
+// Start server when executed directly as main process
+const isMainModule = process.argv[1]?.includes('index.ts') || process.argv[1]?.includes('dist\\index.js') || process.argv[1]?.includes('dist/index.js');
+if (isMainModule && process.env.NODE_ENV !== 'test') {
   validateEnv();
   app.listen(config.port, () => {
     console.log(`\n==================================================`);
