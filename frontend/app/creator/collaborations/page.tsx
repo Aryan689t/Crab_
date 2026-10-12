@@ -16,6 +16,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { StarRating } from '../../../components/ui/StarRating';
 
 interface CollaborationItem {
   id: string;
@@ -218,8 +219,11 @@ export default function CreatorCollaborationsPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-[#737373] uppercase tracking-wider">
-                          {collab.brand.name}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-[#737373] uppercase tracking-wider">
+                            {collab.brand.name}
+                          </span>
+                          <StarRating rating={4.8} size="xs" />
                         </div>
                         <h3 className="text-base sm:text-lg font-bold text-[#171717] mt-0.5">
                           {collab.campaignTitle}

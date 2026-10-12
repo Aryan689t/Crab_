@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { StarRating } from '../../../components/ui/StarRating';
 
 export default function BrandApplicationsPage() {
   const { applications, updateApplicationStatus } = useMockStore();
@@ -187,6 +188,7 @@ export default function BrandApplicationsPage() {
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-bold text-base text-[#171717]">{app.creatorName}</h3>
+                      <StarRating rating={4.9} size="xs" />
                       <span className="text-xs text-[#737373]">{app.creatorHandle}</span>
                       <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-xs font-bold text-emerald-700">
                         {app.matchScore}% Fit

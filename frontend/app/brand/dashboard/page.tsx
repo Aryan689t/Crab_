@@ -25,16 +25,17 @@ import {
   ChevronRight,
   Send,
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from 'recharts';
+import dynamic from 'next/dynamic';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { StarRating } from '../../../components/ui/StarRating';
+
+const BrandPerformanceChart = dynamic(
+  () => import('../../../components/brand/BrandPerformanceChart'),
+  {
+    ssr: false,
+    loading: () => <div className="h-64 w-full pt-2 animate-pulse bg-neutral-100 rounded-xl" />,
+  }
+);
 
 const PERFORMANCE_DATA = {
   '30D': [
@@ -393,54 +394,8 @@ export default function BrandDashboardPage() {
               </span>
             </div>
 
-            {/* Recharts Canvas */}
-            <div className="h-64 w-full pt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="brandReachGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#FF6B00" stopOpacity={0.24} />
-                      <stop offset="95%" stopColor="#FF6B00" stopOpacity={0.01} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="4 4" stroke="#E7E1DA" vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    stroke="#737373"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={{ stroke: '#E7E1DA' }}
-                  />
-                  <YAxis
-                    stroke="#737373"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={{ stroke: '#E7E1DA' }}
-                    tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#FFFFFF',
-                      borderRadius: '12px',
-                      border: '1px solid #E7E1DA',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
-                      fontSize: '12px',
-                      color: '#171717',
-                    }}
-                    formatter={(val: any) => [`${val.toLocaleString()} impressions`, 'Reach']}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="impressions"
-                    stroke="#FF6B00"
-                    strokeWidth={2.5}
-                    fillOpacity={1}
-                    fill="url(#brandReachGradient)"
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            {/* Dynamic Brand Performance Chart */}
+            <BrandPerformanceChart data={chartData} />
 
             {/* Sub-Metric Summary Strip */}
             <div className="grid grid-cols-3 gap-3 pt-4 border-t border-[#E7E1DA]">
@@ -552,6 +507,7 @@ export default function BrandDashboardPage() {
                         <h4 className="text-xs font-bold text-[#171717] truncate">
                           {app.creator.name}
                         </h4>
+                        <StarRating rating={4.9} size="xs" />
                         <span className="text-[11px] text-[#737373]">{app.creator.handle}</span>
                         <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[10px] font-bold">
                           {app.matchScore}% match

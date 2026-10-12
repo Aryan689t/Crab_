@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Sliders, Edit3 } from 'lucide-react';
 import { YouTubeIcon, InstagramIcon, TikTokIcon, XTwitterIcon } from './BrandIcons';
+import { StarRating } from '../ui/StarRating';
 
 interface CreatorProfileBannerProps {
   displayName?: string;
@@ -67,6 +68,7 @@ export function CreatorProfileBanner({
             <h2 className="text-xl sm:text-2xl font-bold text-[#171717] tracking-tight">
               {displayName}
             </h2>
+            <StarRating rating={4.9} size="sm" />
             {isVerified && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-2xs">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />

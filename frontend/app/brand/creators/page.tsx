@@ -22,6 +22,7 @@ import {
   Check,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { StarRating } from '../../../components/ui/StarRating';
 
 export default function BrandFindCreatorsPage() {
   const { creators, campaigns, toggleShortlist, inviteCreatorToCampaign } = useMockStore();
@@ -183,9 +184,10 @@ export default function BrandFindCreatorsPage() {
                       className="w-14 h-14 rounded-2xl object-cover border border-[#E7E1DA] shadow-2xs shrink-0"
                     />
                     <div className="space-y-0.5 min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-bold text-base text-[#171717] truncate">{creator.name}</h3>
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <StarRating rating={creator.rating || 4.8} reviewCount={creator.reviewCount} />
                       </div>
                       <p className="text-xs text-[#737373]">{creator.handle}</p>
                       <p className="text-[11px] text-[#737373]">{creator.location}</p>
@@ -340,7 +342,10 @@ export default function BrandFindCreatorsPage() {
                   className="w-10 h-10 rounded-xl object-cover"
                 />
                 <div>
-                  <p className="text-sm font-bold text-[#171717]">{activeCreator.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-[#171717]">{activeCreator.name}</p>
+                    <StarRating rating={activeCreator.rating || 4.8} size="xs" />
+                  </div>
                   <p className="text-xs text-[#737373]">
                     {activeCreator.handle} • {activeCreator.matchScore}% Match
                   </p>

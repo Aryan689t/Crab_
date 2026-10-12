@@ -24,6 +24,7 @@ import {
   MarketplaceCampaignCard,
   CampaignData,
 } from '../../../components/creator/MarketplaceCampaignCard';
+import { StarRating } from '../../../components/ui/StarRating';
 
 export default function CreatorOpportunitiesPage() {
   const { campaigns: mockCampaigns, applications, applyToCampaign } = useMockStore();
@@ -340,11 +341,12 @@ export default function CreatorOpportunitiesPage() {
                   <h2 className="text-xl font-bold text-[#171717]">
                     {selectedCampaign.title}
                   </h2>
-                  <div className="text-xs text-[#737373]">
-                    Sponsored by{' '}
+                  <div className="text-xs text-[#737373] flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <span>Sponsored by</span>
                     <span className="font-semibold text-[#171717]">
                       {selectedCampaign.brandName}
                     </span>
+                    <StarRating rating={selectedCampaign.brandRating || 4.8} size="xs" />
                   </div>
                 </div>
 
