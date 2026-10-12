@@ -247,14 +247,6 @@ export default function BrandDashboardPage() {
               <Search className="w-4 h-4 text-[#737373]" />
               <span>Find Creators</span>
             </Link>
-
-            <Link
-              href="/brand/campaigns"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF6B00] hover:bg-[#E56000] text-white text-xs font-semibold shadow-xs transition"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Campaign</span>
-            </Link>
           </div>
         </div>
 
