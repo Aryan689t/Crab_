@@ -6,6 +6,7 @@ import {
   getCreatorMetrics,
 } from '../controllers/creatorController.js';
 import { getMyCreatorApplications } from '../controllers/applicationController.js';
+import { getMyCreatorCollaborations } from '../controllers/collaborationController.js';
 import {
   getCreatorContent,
   getContentDetails,
@@ -25,6 +26,7 @@ creatorRouter.post('/profile', authenticateToken, requireRole('CREATOR'), upsert
 creatorRouter.get('/me/metrics', authenticateToken, requireRole('CREATOR'), getCreatorMetrics);
 creatorRouter.get('/me/applications', authenticateToken, requireRole('CREATOR'), getMyCreatorApplications);
 creatorRouter.get('/me/application', authenticateToken, requireRole('CREATOR'), getMyCreatorApplications);
+creatorRouter.get('/me/collaborations', authenticateToken, requireRole('CREATOR'), getMyCreatorCollaborations);
 
 // Content endpoints
 creatorRouter.get('/me/content', authenticateToken, requireRole('CREATOR'), getCreatorContent);

@@ -98,18 +98,79 @@ const BRAND_COLLABORATIONS: BrandCollaborationItem[] = [
   },
 ];
 
+import { fetchApi } from '../../../lib/api';
+
 export default function BrandCollaborationsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, token, loading: authLoading } = useAuth();
+  const [dbCollabs, setDbCollabs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
+  useEffect(() => {
+    async function loadBrandCollaborations() {
+      if (!token) return;
+      setLoading(true);
+      try {
+        const res = await fetchApi<{ data: any[] }>('/api/brands/me/collaborations', {}, token);
+        if (res?.data) {
+          setDbCollabs(res.data);
+        }
+      } catch (err) {
+        console.warn('[BRAND_COLLABORATIONS] Could not fetch live collaborations:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadBrandCollaborations();
+  }, [token]);
+
+  const allCollabs: BrandCollaborationItem[] = React.useMemo(() => {
+    if (dbCollabs.length > 0) {
+      const mapped: BrandCollaborationItem[] = dbCollabs.map((c: any) => {
+        const creatorName = c.creator?.displayName || 'Creator Partner';
+        const handle = c.creator?.socialAccounts?.[0]?.username || `@${creatorName.toLowerCase().replace(/\s+/g, '')}`;
+        const initials = creatorName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+        const status: 'IN_PROGRESS' | 'CONTRACT_PENDING' | 'COMPLETED' =
+          c.status === 'COMPLETED' ? 'COMPLETED' :
+          c.status === 'PENDING' ? 'CONTRACT_PENDING' : 'IN_PROGRESS';
+
+        return {
+          id: c.id,
+          creator: {
+            name: creatorName,
+            handle,
+            avatar: initials || 'CP',
+            niche: c.creator?.bio || 'Verified Tech Creator',
+          },
+          campaignTitle: c.campaign?.title || 'Brand Partnership',
+          category: c.campaign?.platform || 'Developer Ecosystem',
+          status,
+          agreedAmount: `₹${(Number(c.agreedAmount) || c.campaign?.budgetMin || 50000).toLocaleString()}`,
+          deadline: c.deadline
+            ? new Date(c.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : 'Nov 30, 2026',
+          deliverablesCount: 2,
+          completedDeliverables: status === 'COMPLETED' ? 2 : 1,
+          currentMilestone: status === 'COMPLETED' ? 'All deliverables approved & verified' : 'Production underway',
+          deliverablesList: ['Application accepted & collaboration launched', 'Deliverable link submission pending'],
+        };
+      });
+
+      const dbIds = new Set(mapped.map((m) => m.id));
+      const extraMocks = BRAND_COLLABORATIONS.filter((m) => !dbIds.has(m.id));
+      return [...mapped, ...extraMocks];
+    }
+    return BRAND_COLLABORATIONS;
+  }, [dbCollabs]);
+
   const TABS = [
-    { label: 'ALL', count: BRAND_COLLABORATIONS.length },
-    { label: 'IN_PROGRESS', count: BRAND_COLLABORATIONS.filter((c) => c.status === 'IN_PROGRESS').length },
-    { label: 'COMPLETED', count: BRAND_COLLABORATIONS.filter((c) => c.status === 'COMPLETED').length },
+    { label: 'ALL', count: allCollabs.length },
+    { label: 'IN_PROGRESS', count: allCollabs.filter((c) => c.status === 'IN_PROGRESS').length },
+    { label: 'COMPLETED', count: allCollabs.filter((c) => c.status === 'COMPLETED').length },
   ];
 
-  const filteredCollabs = BRAND_COLLABORATIONS.filter((c) => {
+  const filteredCollabs = allCollabs.filter((c) => {
     const matchesTab = activeTab === 'ALL' || c.status === activeTab;
     const matchesSearch =
       searchQuery.trim() === '' ||

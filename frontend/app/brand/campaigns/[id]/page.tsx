@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { AppShell } from '../../../../components/layout/AppShell';
 import { useMockStore } from '../../../../mock/store';
 import { useAuth } from '../../../../lib/auth-context';
-import { fetchApi } from '../../../../lib/api';
+import { fetchApi, invalidateApiCache } from '../../../../lib/api';
 import {
   Layers,
   ArrowLeft,
@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Building2,
   Plus,
+  Loader2,
 } from 'lucide-react';
 
 export default function CampaignWorkspacePage({
@@ -39,17 +40,25 @@ export default function CampaignWorkspacePage({
   const { token } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'creators' | 'deliverables' | 'aiInsights' | 'payments'>('overview');
   const [apiCampaign, setApiCampaign] = useState<any>(null);
+  const [apiApps, setApiApps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    const fetchCampaign = async () => {
+    const fetchCampaignData = async () => {
       if (!token || !campaignId) return;
       setLoading(true);
       try {
-        const res = await fetchApi<{ data: any }>(`/api/campaigns/${campaignId}`, {}, token);
-        if (mounted && res?.data) {
-          setApiCampaign(res.data);
+        const [campRes, appsRes] = await Promise.allSettled([
+          fetchApi<{ data: any }>(`/api/campaigns/${campaignId}`, {}, token),
+          fetchApi<{ data: any[] }>(`/api/campaigns/${campaignId}/applications`, {}, token),
+        ]);
+        if (mounted && campRes.status === 'fulfilled' && campRes.value?.data) {
+          setApiCampaign(campRes.value.data);
+        }
+        if (mounted && appsRes.status === 'fulfilled' && appsRes.value?.data) {
+          setApiApps(appsRes.value.data);
         }
       } catch (err) {
         console.warn('[CAMPAIGN DETAIL] API fetch fallback to local store:', err);
@@ -58,12 +67,33 @@ export default function CampaignWorkspacePage({
       }
     };
 
-    fetchCampaign();
+    fetchCampaignData();
 
     return () => {
       mounted = false;
     };
   }, [campaignId, token]);
+
+  const handleUpdateStatus = async (appId: string, newStatus: string) => {
+    setUpdatingId(appId);
+    try {
+      if (token) {
+        await fetchApi(`/api/applications/${appId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: newStatus }),
+        }, token);
+        invalidateApiCache('/applications');
+        invalidateApiCache('/brands');
+      }
+      setApiApps((prev) => prev.map((a) => (a.id === appId ? { ...a, status: newStatus } : a)));
+      updateApplicationStatus(appId, newStatus as any);
+    } catch (err) {
+      console.warn('[CAMPAIGN_WORKSPACE] update status fallback:', err);
+      updateApplicationStatus(appId, newStatus as any);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const mockFallback =
     campaigns.find((c) => c.id === campaignId) ||
@@ -106,9 +136,30 @@ export default function CampaignWorkspacePage({
       }
     : mockFallback;
 
-  const campaignApplications = applications.filter(
-    (a) => a.campaignId === campaign.id || a.campaignTitle === campaign.title
-  );
+  const campaignApplications = React.useMemo(() => {
+    if (apiApps.length > 0) {
+      const mapped = apiApps.map((a: any) => ({
+        id: a.id,
+        creatorId: a.creator?.id || 'creator_01',
+        creatorName: a.creator?.displayName || 'Creator Partner',
+        creatorHandle: a.creator?.socialAccounts?.[0]?.username || '@verifiedcreator',
+        creatorAvatar: a.creator?.profileImageUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        campaignId: campaign.id,
+        campaignTitle: campaign.title,
+        status: a.status || 'SUBMITTED',
+        proposedRate: Number(a.proposedRate) || campaign.budgetMin,
+        matchScore: 92,
+        deliverablesSummary: '1 Dedicated Video + Social Integration',
+        note: a.pitch || '',
+      }));
+      const dbIds = new Set(mapped.map((m: any) => m.id));
+      const extraMocks = applications.filter((a) => (a.campaignId === campaign.id || a.campaignTitle === campaign.title) && !dbIds.has(a.id));
+      return [...mapped, ...extraMocks];
+    }
+    return applications.filter(
+      (a) => a.campaignId === campaign.id || a.campaignTitle === campaign.title
+    );
+  }, [apiApps, applications, campaign.id, campaign.title, campaign.budgetMin]);
 
   return (
     <AppShell
@@ -328,14 +379,17 @@ export default function CampaignWorkspacePage({
                     {app.status !== 'ACCEPTED' && (
                       <div className="flex items-center space-x-1.5">
                         <button
-                          onClick={() => updateApplicationStatus(app.id, 'ACCEPTED')}
-                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition"
+                          disabled={updatingId === app.id}
+                          onClick={() => handleUpdateStatus(app.id, 'ACCEPTED')}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold transition flex items-center space-x-1"
                         >
-                          Accept
+                          {updatingId === app.id && <Loader2 className="w-3 h-3 animate-spin" />}
+                          <span>Accept</span>
                         </button>
                         <button
-                          onClick={() => updateApplicationStatus(app.id, 'DECLINED')}
-                          className="px-3 py-1.5 rounded-xl bg-[#F5F6FA] hover:bg-red-50 hover:text-red-600 text-[#626782] text-xs font-semibold border border-[#E7E8F0] transition"
+                          disabled={updatingId === app.id}
+                          onClick={() => handleUpdateStatus(app.id, 'DECLINED')}
+                          className="px-3 py-1.5 rounded-xl bg-[#F5F6FA] hover:bg-red-50 hover:text-red-600 disabled:opacity-50 text-[#626782] text-xs font-semibold border border-[#E7E8F0] transition"
                         >
                           Decline
                         </button>

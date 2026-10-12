@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useMockStore, getStoredCreators } from '../../../mock/store';
 import { useAuth } from '../../../lib/auth-context';
-import { fetchApi } from '../../../lib/api';
+import { fetchApi, invalidateApiCache } from '../../../lib/api';
 import {
   Search,
   CheckCircle2,
@@ -154,6 +154,8 @@ export default function CreatorOpportunitiesPage() {
     });
   }, [campaigns, activeCategory, sortBy, searchQuery]);
 
+  const [appliedIds, setAppliedIds] = useState<string[]>([]);
+
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCampaign) return;
@@ -171,11 +173,15 @@ export default function CreatorOpportunitiesPage() {
           },
           token
         );
+        invalidateApiCache('/applications');
+        invalidateApiCache('/creators');
+        invalidateApiCache('/campaigns');
       } catch (err) {
         console.warn('[OPPORTUNITIES] Backend apply submission fallback:', err);
       }
     }
 
+    setAppliedIds((prev) => [...prev, selectedCampaign.id]);
     applyToCampaign(selectedCampaign.id, 'creator_01', pitchNote);
     setApplySuccess(true);
     setTimeout(() => {
@@ -186,7 +192,7 @@ export default function CreatorOpportunitiesPage() {
   };
 
   const isAlreadyApplied = (campaignId: string) => {
-    return applications.some((a) => a.campaignId === campaignId);
+    return appliedIds.includes(campaignId) || applications.some((a) => a.campaignId === campaignId);
   };
 
   return (
