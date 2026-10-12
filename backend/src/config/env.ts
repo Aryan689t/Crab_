@@ -29,3 +29,25 @@ export const config = {
   },
   isDevelopment: (process.env.NODE_ENV || 'development') === 'development',
 };
+
+export function validateEnv(): { valid: boolean; missing: string[] } {
+  const missing: string[] = [];
+
+  if (!config.databaseUrl) missing.push('DATABASE_URL');
+  if (!config.supabase.url) missing.push('SUPABASE_URL');
+  if (!config.supabase.anonKey && !config.supabase.serviceRoleKey) {
+    missing.push('SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY / SUPABASE_SERVICE_ROLE_KEY)');
+  }
+
+  if (missing.length > 0) {
+    console.warn(`\n⚠️  [ENV CONFIGURATION NOTICE]`);
+    console.warn(`The following recommended environment variable(s) are not configured in backend/.env:`);
+    missing.forEach((v) => console.warn(`   - ${v}`));
+    console.warn(`Copy backend/.env.example to backend/.env and fill in your Supabase connection strings.\n`);
+  }
+
+  return {
+    valid: missing.length === 0,
+    missing,
+  };
+}
