@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getBrandProfile, upsertBrandProfile, getBrandPublicProfile } from '../controllers/brandController.js';
+import { getBrandProfile, upsertBrandProfile, getBrandPublicProfile, getBrandRecentActivity } from '../controllers/brandController.js';
 import { getMyBrandCampaigns } from '../controllers/campaignController.js';
 import { getMyBrandApplications } from '../controllers/applicationController.js';
 import { getMyBrandCollaborations } from '../controllers/collaborationController.js';
@@ -9,6 +9,7 @@ export const brandRouter = Router();
 
 // Current authenticated brand endpoints
 brandRouter.get('/me', authenticateToken, requireRole('BRAND'), getBrandProfile);
+brandRouter.get('/me/activity', authenticateToken, requireRole('BRAND'), getBrandRecentActivity);
 brandRouter.get('/me/campaigns', authenticateToken, requireRole('BRAND'), getMyBrandCampaigns);
 brandRouter.get('/me/applications', authenticateToken, requireRole('BRAND'), getMyBrandApplications);
 brandRouter.get('/me/application', authenticateToken, requireRole('BRAND'), getMyBrandApplications);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../lib/auth-context';
@@ -10,24 +10,18 @@ import {
   Users,
   Clock,
   DollarSign,
-  Plus,
-  ArrowRight,
-  TrendingUp,
   Sparkles,
   Search,
   CheckCircle2,
-  Calendar,
   BarChart3,
-  ExternalLink,
-  MessageSquare,
-  ShieldCheck,
-  Check,
   ChevronRight,
-  Send,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 import { StarRating } from '../../../components/ui/StarRating';
+import { SideDrawer } from '../../../components/ui/SideDrawer';
 
 const BrandPerformanceChart = dynamic(
   () => import('../../../components/brand/BrandPerformanceChart'),
@@ -146,44 +140,57 @@ const ACTIVE_CAMPAIGNS_SUMMARY = [
   },
 ];
 
-const RECENT_ACTIVITY_EVENTS = [
-  {
-    id: 'act_1',
-    title: 'New proposal received',
-    description: 'Alex Chen applied to Cloud Infrastructure Launch',
-    time: '12m ago',
-    icon: Users,
-    iconColor: 'text-[#FF6B00]',
-    bgColor: 'bg-[#FFF4EB]',
-  },
-  {
-    id: 'act_2',
-    title: 'Milestone draft reviewed',
-    description: 'Sarah Codes submitted 12-min YouTube tutorial rough cut',
-    time: '2h ago',
-    icon: CheckCircle2,
-    iconColor: 'text-emerald-600',
-    bgColor: 'bg-emerald-50',
-  },
-  {
-    id: 'act_3',
-    title: 'Agreement signed',
-    description: 'TechFlow sponsorship terms approved for ₹95,000',
-    time: 'Yesterday',
-    icon: Sparkles,
-    iconColor: 'text-[#FF6B00]',
-    bgColor: 'bg-[#FFF4EB]',
-  },
-  {
-    id: 'act_4',
-    title: 'Escrow payment verified',
-    description: 'Milestone 1 compensation released to Alex Chen',
-    time: '2 days ago',
-    icon: DollarSign,
-    iconColor: 'text-emerald-600',
-    bgColor: 'bg-emerald-50',
-  },
-];
+interface ActivityItem {
+  id: string;
+  title: string;
+  description: string;
+  time: string;
+  timestamp: string | Date;
+  iconType: 'proposal' | 'milestone' | 'agreement' | 'payment' | 'campaign';
+  href: string;
+  status?: string;
+}
+
+function getActivityIconConfig(iconType: string) {
+  switch (iconType) {
+    case 'proposal':
+      return {
+        icon: Users,
+        iconColor: 'text-[#FF6B00]',
+        bgColor: 'bg-[#FFF4EB]',
+      };
+    case 'milestone':
+      return {
+        icon: CheckCircle2,
+        iconColor: 'text-emerald-600',
+        bgColor: 'bg-emerald-50',
+      };
+    case 'agreement':
+      return {
+        icon: Sparkles,
+        iconColor: 'text-[#FF6B00]',
+        bgColor: 'bg-[#FFF4EB]',
+      };
+    case 'payment':
+      return {
+        icon: DollarSign,
+        iconColor: 'text-emerald-600',
+        bgColor: 'bg-emerald-50',
+      };
+    case 'campaign':
+      return {
+        icon: Layers,
+        iconColor: 'text-blue-600',
+        bgColor: 'bg-blue-50',
+      };
+    default:
+      return {
+        icon: Sparkles,
+        iconColor: 'text-[#FF6B00]',
+        bgColor: 'bg-[#FFF4EB]',
+      };
+  }
+}
 
 export default function BrandDashboardPage() {
   const { user, token, loading: authLoading } = useAuth();
@@ -192,6 +199,48 @@ export default function BrandDashboardPage() {
   const [brandProfile, setBrandProfile] = useState<any>(null);
   const [timeRange, setTimeRange] = useState<'30D' | '90D' | '6M' | '1Y'>('30D');
   const [loading, setLoading] = useState(false);
+
+  // Activity Drawer State
+  const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [activitiesLoading, setActivitiesLoading] = useState<boolean>(true);
+  const [activitiesError, setActivitiesError] = useState<string | null>(null);
+
+  // Applications & Campaigns Data
+  const [applications, setApplications] = useState<any[]>(RECENT_APPLICATIONS);
+  const [campaigns, setCampaigns] = useState<any[]>(ACTIVE_CAMPAIGNS_SUMMARY);
+
+  const fetchActivities = useCallback(async (authToken?: string | null) => {
+    const activeToken = authToken || token;
+    if (!activeToken) {
+      setActivitiesLoading(false);
+      return;
+    }
+
+    setActivitiesLoading(true);
+    setActivitiesError(null);
+    try {
+      const res = await fetchApi<{ data: { activities: ActivityItem[]; unreadCount: number } }>(
+        '/api/brands/me/activity',
+        {},
+        activeToken
+      );
+
+      if (res?.data) {
+        setActivities(res.data.activities || []);
+        setUnreadCount(res.data.unreadCount || 0);
+      } else {
+        setActivities([]);
+        setUnreadCount(0);
+      }
+    } catch (err: any) {
+      console.error('Failed to load activity feed:', err);
+      setActivitiesError(err?.message || 'Failed to load activity feed');
+    } finally {
+      setActivitiesLoading(false);
+    }
+  }, [token]);
 
   useEffect(() => {
     let mounted = true;
@@ -206,9 +255,54 @@ export default function BrandDashboardPage() {
         setLoading(true);
         try {
           if (token) {
-            const res = await fetchApi<any>('/api/brands/me', {}, token).catch(() => null);
-            if (mounted && res?.data) {
-              setBrandProfile(res.data);
+            // Load brand profile
+            const profileRes = await fetchApi<any>('/api/brands/me', {}, token).catch(() => null);
+            if (mounted && profileRes?.data) {
+              setBrandProfile(profileRes.data);
+            }
+
+            // Load real activities
+            if (mounted) {
+              fetchActivities(token);
+            }
+
+            // Attempt to load real applications if present
+            const appsRes = await fetchApi<any>('/api/brands/me/applications', {}, token).catch(() => null);
+            if (mounted && appsRes?.data && Array.isArray(appsRes.data) && appsRes.data.length > 0) {
+              const mappedApps = appsRes.data.slice(0, 5).map((app: any) => ({
+                id: app.id,
+                creator: {
+                  name: app.creator?.displayName || 'Creator',
+                  handle: app.creator?.socialAccounts?.[0]?.username
+                    ? `@${app.creator.socialAccounts[0].username}`
+                    : '@creator',
+                  avatar: (app.creator?.displayName || 'CR').slice(0, 2).toUpperCase(),
+                  niche: app.creator?.bio || 'Creator',
+                },
+                campaignTitle: app.campaign?.title || 'Brand Campaign',
+                matchScore: 92,
+                requestedBudget: app.proposedRate ? `₹${Number(app.proposedRate).toLocaleString()}` : 'Negotiable',
+                status: app.status || 'UNDER_REVIEW',
+                appliedDate: new Date(app.createdAt).toLocaleDateString(),
+              }));
+              setApplications(mappedApps);
+            }
+
+            // Attempt to load real campaigns if present
+            const campsRes = await fetchApi<any>('/api/brands/me/campaigns', {}, token).catch(() => null);
+            if (mounted && campsRes?.data && Array.isArray(campsRes.data) && campsRes.data.length > 0) {
+              const mappedCamps = campsRes.data.slice(0, 3).map((camp: any) => ({
+                id: camp.id,
+                title: camp.title,
+                category: camp.contentType || 'Campaign',
+                budget: camp.budgetMax ? `₹${Number(camp.budgetMax).toLocaleString()}` : '₹50,000',
+                creatorsCount: 1,
+                deliverablesCompleted: camp.status === 'COMPLETED' ? 2 : 1,
+                totalDeliverables: 2,
+                status: camp.status || 'ACTIVE',
+                deadline: 'Nov 2026',
+              }));
+              setCampaigns(mappedCamps);
             }
           }
         } finally {
@@ -222,14 +316,14 @@ export default function BrandDashboardPage() {
     return () => {
       mounted = false;
     };
-  }, [user?.id, user?.role, authLoading, token, router]);
+  }, [user?.id, user?.role, authLoading, token, router, fetchActivities]);
 
-  const brandDisplayName = brandProfile?.name || user?.displayName || 'Acme Cloud';
+  const brandDisplayName = brandProfile?.name || user?.displayName || 'Avinya Technologies';
   const chartData = PERFORMANCE_DATA[timeRange];
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 sm:space-y-7">
         {/* 1. Unified Page Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <PortalPageHeader
@@ -240,6 +334,22 @@ export default function BrandDashboardPage() {
           />
 
           <div className="flex items-center gap-3 self-start md:self-center">
+            {/* Activity Drawer Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setIsActivityDrawerOpen(true)}
+              aria-label="View campaign activity"
+              className="relative inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border border-[#E7E1DA] text-[#171717] hover:bg-[#F8F6F2] hover:border-[#FF6B00]/40 text-xs font-semibold shadow-xs transition cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-[#FF6B00]" />
+              <span>Activity</span>
+              {unreadCount > 0 && (
+                <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#FF6B00] text-white min-w-[18px] h-[18px]">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
             <Link
               href="/brand/creators"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-[#E7E1DA] text-[#171717] hover:bg-[#F8F6F2] text-xs font-semibold shadow-xs transition"
@@ -337,130 +447,74 @@ export default function BrandDashboardPage() {
           </div>
         </div>
 
-        {/* 3. Performance Chart & Campaign Activity Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left: Campaign Performance Chart (8 cols) */}
-          <div className="lg:col-span-8 bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs space-y-6 flex flex-col justify-between">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-[#FFF4EB] text-[#FF6B00]">
-                    <BarChart3 className="w-4 h-4" />
-                  </span>
-                  <h3 className="text-base font-bold text-[#171717] tracking-tight">
-                    Campaign reach & qualified impressions
-                  </h3>
-                </div>
-                <p className="text-xs text-[#737373] mt-1">
-                  Verified audience reach across contracted creator publications
-                </p>
+        {/* 3. Performance Chart Card — Expanded to Full Horizontal Width */}
+        <div className="w-full bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs space-y-6 flex flex-col justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-[#FFF4EB] text-[#FF6B00]">
+                  <BarChart3 className="w-4 h-4" />
+                </span>
+                <h3 className="text-base font-bold text-[#171717] tracking-tight">
+                  Campaign reach & qualified impressions
+                </h3>
               </div>
-
-              {/* Time Range Filter Buttons */}
-              <div className="inline-flex items-center gap-1 p-1 bg-[#F8F6F2] rounded-xl border border-[#E7E1DA] self-start sm:self-auto">
-                {(['30D', '90D', '6M', '1Y'] as const).map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setTimeRange(r)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                      timeRange === r
-                        ? 'bg-[#FF6B00] text-white shadow-xs'
-                        : 'text-[#737373] hover:text-[#171717] hover:bg-white/60'
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
+              <p className="text-xs text-[#737373] mt-1">
+                Verified audience reach across contracted creator publications
+              </p>
             </div>
 
-            {/* Performance Value Header */}
-            <div className="flex items-baseline gap-3 pt-1">
-              <span className="text-2xl font-extrabold text-[#171717]">148,200</span>
-              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                +24.8% vs previous window
-              </span>
-              <span className="text-xs text-[#737373] ml-auto hidden sm:inline">
-                Cost per impression: <strong className="text-[#171717]">₹1.72</strong>
-              </span>
-            </div>
-
-            {/* Dynamic Brand Performance Chart */}
-            <BrandPerformanceChart data={chartData} />
-
-            {/* Sub-Metric Summary Strip */}
-            <div className="grid grid-cols-3 gap-3 pt-4 border-t border-[#E7E1DA]">
-              <div className="p-3 bg-[#F8F6F2] rounded-xl border border-[#E7E1DA]/80">
-                <span className="text-[11px] text-[#737373] block">Avg Match Fit</span>
-                <span className="text-sm font-bold text-[#171717] mt-0.5 block">91.4%</span>
-              </div>
-              <div className="p-3 bg-[#F8F6F2] rounded-xl border border-[#E7E1DA]/80">
-                <span className="text-[11px] text-[#737373] block">Deliverables Delivered</span>
-                <span className="text-sm font-bold text-emerald-700 mt-0.5 block">5 of 7</span>
-              </div>
-              <div className="p-3 bg-[#F8F6F2] rounded-xl border border-[#E7E1DA]/80">
-                <span className="text-[11px] text-[#737373] block">On-Time Completion</span>
-                <span className="text-sm font-bold text-[#171717] mt-0.5 block">100%</span>
-              </div>
+            {/* Time Range Filter Buttons */}
+            <div className="inline-flex items-center gap-1 p-1 bg-[#F8F6F2] rounded-xl border border-[#E7E1DA] self-start sm:self-auto">
+              {(['30D', '90D', '6M', '1Y'] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setTimeRange(r)}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    timeRange === r
+                      ? 'bg-[#FF6B00] text-white shadow-xs'
+                      : 'text-[#737373] hover:text-[#171717] hover:bg-white/60'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Right: Campaign Activity Feed (4 cols) */}
-          <div className="lg:col-span-4 bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs space-y-5 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-[#E7E1DA]">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-[#FFF4EB] text-[#FF6B00]">
-                    <Sparkles className="w-4 h-4" />
-                  </span>
-                  <h3 className="text-base font-bold text-[#171717] tracking-tight">
-                    Campaign Activity
-                  </h3>
-                </div>
-                <span className="text-[11px] font-semibold text-[#737373]">Live Feed</span>
-              </div>
+          {/* Performance Value Header */}
+          <div className="flex items-baseline gap-3 pt-1">
+            <span className="text-2xl font-extrabold text-[#171717]">148,200</span>
+            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+              +24.8% vs previous window
+            </span>
+            <span className="text-xs text-[#737373] ml-auto hidden sm:inline">
+              Cost per impression: <strong className="text-[#171717]">₹1.72</strong>
+            </span>
+          </div>
 
-              {/* Event List */}
-              <div className="mt-4 space-y-4">
-                {RECENT_ACTIVITY_EVENTS.map((event) => {
-                  const Icon = event.icon;
-                  return (
-                    <div key={event.id} className="flex items-start gap-3">
-                      <span className={`p-2 rounded-xl shrink-0 ${event.bgColor} ${event.iconColor}`}>
-                        <Icon className="w-3.5 h-3.5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <h4 className="text-xs font-bold text-[#171717] truncate">
-                            {event.title}
-                          </h4>
-                          <span className="text-[10px] text-[#737373] shrink-0">{event.time}</span>
-                        </div>
-                        <p className="text-xs text-[#737373] mt-0.5 leading-relaxed">
-                          {event.description}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* Dynamic Brand Performance Chart */}
+          <BrandPerformanceChart data={chartData} />
+
+          {/* Sub-Metric Summary Strip */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-[#E7E1DA]">
+            <div className="p-3 bg-[#F8F6F2] rounded-xl border border-[#E7E1DA]/80">
+              <span className="text-[11px] text-[#737373] block">Avg Match Fit</span>
+              <span className="text-sm font-bold text-[#171717] mt-0.5 block">91.4%</span>
             </div>
-
-            {/* Quick Link to Collaborations */}
-            <div className="pt-4 border-t border-[#E7E1DA]">
-              <Link
-                href="/brand/collaborations"
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#F8F6F2] hover:bg-[#FFF4EB] text-[#171717] hover:text-[#FF6B00] border border-[#E7E1DA] text-xs font-semibold transition"
-              >
-                <span>View All Collaborations</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
+            <div className="p-3 bg-[#F8F6F2] rounded-xl border border-[#E7E1DA]/80">
+              <span className="text-[11px] text-[#737373] block">Deliverables Delivered</span>
+              <span className="text-sm font-bold text-emerald-700 mt-0.5 block">5 of 7</span>
+            </div>
+            <div className="p-3 bg-[#F8F6F2] rounded-xl border border-[#E7E1DA]/80">
+              <span className="text-[11px] text-[#737373] block">On-Time Completion</span>
+              <span className="text-sm font-bold text-[#171717] mt-0.5 block">100%</span>
             </div>
           </div>
         </div>
 
-        {/* 4. Bottom Grid: Recent Applications & Active Campaigns */}
+        {/* 4. Lower Dashboard Grid: Reorganized Immediately Below the Chart */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left: Recent Inbound Applications (7 cols) */}
           <div className="lg:col-span-7 bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs space-y-5">
@@ -478,14 +532,14 @@ export default function BrandDashboardPage() {
                 href="/brand/applications"
                 className="text-xs font-bold text-[#FF6B00] hover:underline flex items-center gap-1 shrink-0"
               >
-                <span>View all (5)</span>
+                <span>View all ({applications.length})</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
 
             {/* Applications List */}
             <div className="space-y-3">
-              {RECENT_APPLICATIONS.map((app) => (
+              {applications.map((app) => (
                 <div
                   key={app.id}
                   className="p-4 rounded-xl border border-[#E7E1DA] bg-[#F8F6F2]/40 hover:bg-[#F8F6F2] transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
@@ -549,7 +603,7 @@ export default function BrandDashboardPage() {
 
             {/* Campaign Cards List */}
             <div className="space-y-3">
-              {ACTIVE_CAMPAIGNS_SUMMARY.map((camp) => {
+              {campaigns.map((camp) => {
                 const percent = Math.round(
                   (camp.deliverablesCompleted / camp.totalDeliverables) * 100
                 );
@@ -594,6 +648,153 @@ export default function BrandDashboardPage() {
           </div>
         </div>
       </main>
+
+      {/* Floating Unobtrusive Right-Edge Trigger on Desktop */}
+      <button
+        type="button"
+        onClick={() => setIsActivityDrawerOpen(true)}
+        aria-label="Toggle Activity Feed"
+        title="Campaign Activity"
+        className="fixed right-0 top-1/2 -translate-y-1/2 z-30 hidden md:flex flex-col items-center gap-1.5 px-2 py-3 bg-white hover:bg-[#FFF4EB] border-l border-y border-[#E7E1DA] rounded-l-xl shadow-md text-[#171717] hover:text-[#FF6B00] transition cursor-pointer group"
+      >
+        <div className="relative">
+          <Sparkles className="w-4 h-4 text-[#FF6B00] group-hover:scale-110 transition-transform" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-[#FF6B00]" />
+          )}
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#737373] group-hover:text-[#FF6B00] [writing-mode:vertical-rl] rotate-180">
+          Activity
+        </span>
+      </button>
+
+      {/* Collapsible Activity Drawer */}
+      <SideDrawer
+        isOpen={isActivityDrawerOpen}
+        onClose={() => setIsActivityDrawerOpen(false)}
+        widthClassName="max-w-md w-full sm:max-w-lg"
+        closeOnBackdropClick={true}
+        closeOnEscape={true}
+        title={
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-[#FFF4EB] text-[#FF6B00]">
+              <Sparkles className="w-4 h-4" />
+            </span>
+            <span className="text-base sm:text-lg font-bold text-[#171717]">
+              Campaign Activity
+            </span>
+            {unreadCount > 0 && (
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-[#FF6B00] text-white">
+                {unreadCount} new
+              </span>
+            )}
+          </div>
+        }
+        subtitle="Live feed of proposals, milestone updates, agreements, and payments"
+        footerContent={
+          <Link
+            href="/brand/collaborations"
+            onClick={() => setIsActivityDrawerOpen(false)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#F8F6F2] hover:bg-[#FFF4EB] text-[#171717] hover:text-[#FF6B00] border border-[#E7E1DA] text-xs font-semibold transition"
+          >
+            <span>View All Collaborations</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
+        }
+      >
+        <div className="space-y-4">
+          {/* Loading State */}
+          {activitiesLoading && (
+            <div className="space-y-3 animate-pulse">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-start gap-3 p-3.5 rounded-xl bg-[#F8F6F2]/60">
+                  <div className="w-9 h-9 rounded-xl bg-[#E7E1DA] shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 bg-[#E7E1DA] rounded w-1/2" />
+                    <div className="h-3 bg-[#E7E1DA] rounded w-5/6" />
+                    <div className="h-2.5 bg-[#E7E1DA] rounded w-1/4" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Error State */}
+          {!activitiesLoading && activitiesError && (
+            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-center space-y-2.5">
+              <div className="flex items-center justify-center gap-1.5 text-xs text-red-700 font-semibold">
+                <AlertCircle className="w-4 h-4" />
+                <span>{activitiesError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchActivities()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-red-200 text-xs font-semibold text-red-700 hover:bg-red-100/50 transition cursor-pointer"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Retry</span>
+              </button>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!activitiesLoading && !activitiesError && activities.length === 0 && (
+            <div className="text-center py-12 px-4 space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#FFF4EB] text-[#FF6B00] flex items-center justify-center mx-auto">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-bold text-[#171717]">No activity recorded yet</h4>
+              <p className="text-xs text-[#737373] max-w-xs mx-auto leading-relaxed">
+                When creators apply to campaigns, update milestones, or receive escrow compensation, real updates will appear here.
+              </p>
+            </div>
+          )}
+
+          {/* Actual Activity List */}
+          {!activitiesLoading && !activitiesError && activities.length > 0 && (
+            <div className="space-y-3">
+              {activities.map((event) => {
+                const iconConfig = getActivityIconConfig(event.iconType);
+                const IconComponent = iconConfig.icon;
+                return (
+                  <Link
+                    key={event.id}
+                    href={event.href || '/brand/collaborations'}
+                    onClick={() => setIsActivityDrawerOpen(false)}
+                    className="flex items-start gap-3.5 p-3.5 rounded-xl border border-[#E7E1DA]/80 bg-[#F8F6F2]/30 hover:bg-[#F8F6F2] hover:border-[#FF6B00]/40 transition group cursor-pointer"
+                  >
+                    <span
+                      className={`p-2.5 rounded-xl shrink-0 ${iconConfig.bgColor} ${iconConfig.iconColor} transition group-hover:scale-105`}
+                    >
+                      <IconComponent className="w-4 h-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <h4 className="text-xs font-bold text-[#171717] group-hover:text-[#FF6B00] transition truncate">
+                          {event.title}
+                        </h4>
+                        <span className="text-[10px] text-[#737373] shrink-0 font-medium">
+                          {event.time}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#737373] mt-1 leading-relaxed">
+                        {event.description}
+                      </p>
+                      {event.status && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-white border border-[#E7E1DA] text-[10px] font-semibold text-[#737373] uppercase tracking-wider">
+                            {event.status}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </SideDrawer>
     </div>
   );
 }
