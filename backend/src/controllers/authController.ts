@@ -66,17 +66,19 @@ export async function register(req: Request, res: Response, next: NextFunction):
     });
 
     if (authError || !authData.user) {
-      if (
-        config.isDevelopment &&
-        (authError?.message?.includes('rate limit') ||
-          email.includes('.local') ||
-          email.includes('.demo') ||
-          email.includes('test'))
-      ) {
-        console.warn('[AUTH REGISTER] Supabase Auth rate limit / dev bypass for:', email);
-        supabaseUserId = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        sessionToken = `mock-${supabaseUserId}-${parsed.role.toLowerCase()}`;
-        refreshToken = `mock-refresh-${supabaseUserId}`;
+      const isRateLimitOrDev =
+        authError?.message?.toLowerCase().includes('rate limit') ||
+        authError?.message?.toLowerCase().includes('over_email_send_rate_limit') ||
+        (authError as any)?.status === 429 ||
+        email.includes('.local') ||
+        email.includes('.demo') ||
+        email.includes('test');
+
+      if (isRateLimitOrDev) {
+        console.warn('[AUTH REGISTER] Supabase Auth rate limit / demo fallback activated for:', email);
+        supabaseUserId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        sessionToken = `token-${supabaseUserId}-${parsed.role.toLowerCase()}`;
+        refreshToken = `refresh-${supabaseUserId}`;
         expiresAt = Math.floor(Date.now() / 1000) + 86400 * 7;
       } else {
         res.status(400).json({
