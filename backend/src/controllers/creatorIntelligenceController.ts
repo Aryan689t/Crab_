@@ -4,6 +4,7 @@ import {
   analyzeAndSaveCreatorIntelligence,
   DatabasePersistenceError,
 } from '../services/creatorIntelligenceService.js';
+import { getComprehensiveCreatorIntelligence } from '../services/intelligenceWorkspaceService.js';
 import { GeminiServiceError } from '../integrations/gemini/index.js';
 
 export async function getCreatorIntelligence(
@@ -22,64 +23,18 @@ export async function getCreatorIntelligence(
       return;
     }
 
-    let creator = userId
-      ? await prisma.creator.findUnique({
-          where: { userId },
-          select: {
-            preferences: true,
-            aiProfile: true,
-          },
-        })
-      : null;
-
-    if (!creator && userEmail) {
-      creator = await prisma.creator.findFirst({
-        where: { user: { email: userEmail } },
-        select: {
-          preferences: true,
-          aiProfile: true,
-        },
-      });
-    }
-
-    if (!creator) {
-      res.status(404).json({
-        error: 'Creator profile not found.',
-      });
-      return;
-    }
-
-    if (!creator.aiProfile) {
-      const creatorPrefs = (creator.preferences as Record<string, any>) || {};
-      const primaryNiches = Array.isArray(creatorPrefs.niches) ? creatorPrefs.niches : [];
+    try {
+      const snapshot = await getComprehensiveCreatorIntelligence(userId || '', userEmail);
       res.status(200).json({
-        data: {
-          hasIntelligence: false,
-          insightTitle: primaryNiches.length > 0
-            ? `Your ${primaryNiches[0]} focus is ready for audience vectors`
-            : 'Build your initial audience footprint',
-          insightBody: 'Publish content and connect your channel so CRAB Gemini AI can analyze your topics and calculate explainable brand match scores.',
-          primaryNiches,
-          secondaryNiches: [],
-          contentStyle: [],
-          audienceSummary: 'Audience analysis will appear once content snapshots are recorded.',
-          opportunityCategories: [],
-        },
+        data: snapshot,
       });
-      return;
+    } catch (err: any) {
+      if (err.message === 'CREATOR_PROFILE_NOT_FOUND') {
+        res.status(404).json({ error: 'Creator profile not found.' });
+        return;
+      }
+      throw err;
     }
-
-    const primaryNiches = creator.aiProfile.primaryNiches || [];
-    res.status(200).json({
-      data: {
-        ...creator.aiProfile,
-        hasIntelligence: true,
-        insightTitle: primaryNiches.length > 0
-          ? `Your ${primaryNiches[0]} content is gaining traction`
-          : 'Audience intelligence snapshot active',
-        insightBody: creator.aiProfile.audienceSummary || 'Your creator vectors are indexed for brand discovery.',
-      },
-    });
   } catch (err) {
     next(err);
   }

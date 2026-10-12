@@ -113,6 +113,7 @@ model Creator {
   applications       Application[]
   collaborations     Collaboration[]
   conversations      Conversation[]
+  shortlists         CampaignShortlist[]
 
   @@map("creators")
 }
@@ -274,6 +275,7 @@ model Campaign {
   applications      Application[]
   collaborations    Collaboration[]
   conversations     Conversation[]
+  shortlists        CampaignShortlist[]
 
   @@map("campaigns")
 }
@@ -323,6 +325,22 @@ model Match {
   @@unique([creatorId, campaignId])
   @@index([finalScore])
   @@map("matches")
+}
+
+model CampaignShortlist {
+  id         String   @id @default(uuid())
+  campaignId String   @map("campaign_id")
+  creatorId  String   @map("creator_id")
+  status     String   @default("SHORTLISTED")
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, creatorId])
+  @@map("campaign_shortlists")
 }
 
 model Collaboration {
