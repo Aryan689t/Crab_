@@ -11,10 +11,32 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
+// Parse configured origins (supports comma-separated list)
+const configuredOrigins = (config.corsOrigin || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const defaultOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+const allowedOrigins = Array.from(new Set([...configuredOrigins, ...defaultOrigins]));
+
+// CORS configuration supporting preview and production Vercel deployments
 app.use(
   cors({
-    origin: [config.corsOrigin, 'http://localhost:3000', 'http://127.0.0.1:3000'],
+    origin: (requestOrigin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+      if (!requestOrigin) return callback(null, true);
+
+      if (
+        allowedOrigins.includes(requestOrigin) ||
+        requestOrigin.endsWith('.vercel.app') ||
+        requestOrigin.includes('localhost:') ||
+        requestOrigin.includes('127.0.0.1:')
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error(`Origin ${requestOrigin} not allowed by Access-Control-Allow-Origin`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

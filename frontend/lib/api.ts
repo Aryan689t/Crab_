@@ -98,11 +98,11 @@ export async function fetchApi<T>(
   };
 
   const executeRequest = async (): Promise<T> => {
-    try {
-      // 3.5-second abort signal to prevent hanging requests on network delay
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+    // 15-second abort signal to prevent premature timeouts on cloud cold starts / DB transactions
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
+    try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
         headers,
@@ -143,6 +143,23 @@ export async function fetchApi<T>(
       }
 
       return data as T;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Request timed out. The server took too long to respond.');
+      }
+      if (err.name === 'TypeError' && (err.message?.includes('fetch') || err.message?.includes('NetworkError'))) {
+        const isClient = typeof window !== 'undefined';
+        const isProdHost = isClient && !['localhost', '127.0.0.1'].includes(window.location.hostname);
+        if (isProdHost && (API_BASE_URL.includes('localhost') || API_BASE_URL.includes('127.0.0.1'))) {
+          throw new Error(
+            `Connection failed: The deployed frontend is trying to call ${API_BASE_URL}. Please configure NEXT_PUBLIC_API_URL in your Vercel project settings with your deployed backend URL.`
+          );
+        }
+        throw new Error(
+          `Unable to connect to the backend API at ${API_BASE_URL}. Please verify the backend is running and CORS allows this origin.`
+        );
+      }
+      throw err;
     } finally {
       inFlightRequests.delete(cacheKey);
     }

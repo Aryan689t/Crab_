@@ -12,21 +12,41 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const { signup } = useAuth();
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
       setErrorMsg('Please enter an email address.');
       return;
     }
-    setErrorMsg(null);
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await signup(email, password, selectedRole);
+      await signup(trimmedEmail, password, selectedRole);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Signup failed.');
+      const msg = err.message || 'Signup failed.';
+      if (msg.includes('confirm your account') || msg.includes('Registration successful')) {
+        setSuccessMsg(msg);
+      } else {
+        setErrorMsg(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -112,6 +132,13 @@ export default function SignupPage() {
               </div>
             </div>
           </div>
+
+          {successMsg && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+          )}
 
           {errorMsg && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center space-x-2">
