@@ -40,10 +40,17 @@ export async function applyToCampaign(req: Request, res: Response, next: NextFun
     }
 
     // Derive creator identity from verified server-side user session
-    const creator = await prisma.creator.findUnique({
+    let creator = await prisma.creator.findUnique({
       where: { userId: req.user.id },
       select: { id: true, displayName: true },
     });
+
+    if (!creator && req.user.email) {
+      creator = await prisma.creator.findFirst({
+        where: { user: { email: req.user.email } },
+        select: { id: true, displayName: true },
+      });
+    }
 
     if (!creator) {
       res.status(404).json({
@@ -159,10 +166,17 @@ export async function getMyCreatorApplications(req: Request, res: Response, next
       return;
     }
 
-    const creator = await prisma.creator.findUnique({
+    let creator = await prisma.creator.findUnique({
       where: { userId: req.user.id },
       select: { id: true },
     });
+
+    if (!creator && req.user.email) {
+      creator = await prisma.creator.findFirst({
+        where: { user: { email: req.user.email } },
+        select: { id: true },
+      });
+    }
 
     if (!creator) {
       res.status(404).json({ error: 'CreatorProfileNotFound', message: 'Creator profile not found.' });
