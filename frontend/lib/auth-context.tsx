@@ -15,6 +15,7 @@ export interface UserProfile {
   brandId?: string | null;
   displayName?: string;
   name?: string;
+  onboardingCompleted?: boolean;
 }
 
 interface AuthContextType {
@@ -115,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         creatorId: res.user.creatorId,
         brandId: res.user.brandId,
         displayName: res.user.displayName || email.split('@')[0],
+        onboardingCompleted: res.user.onboardingCompleted ?? (res.user.role === 'BRAND'),
       };
 
       setToken(activeToken);
@@ -122,9 +124,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('crab_auth_token', activeToken);
       localStorage.setItem('crab_user', JSON.stringify(authenticatedUser));
 
-      // Redirect based on actual verified role
+      // Redirect based on actual verified role and onboarding state
       if (authenticatedUser.role === 'BRAND') {
         router.push('/brand/dashboard');
+      } else if (!authenticatedUser.onboardingCompleted) {
+        router.push('/creator/onboarding');
       } else {
         router.push('/creator/dashboard');
       }
@@ -142,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (isOfflineOrDemo) {
         console.warn('[AUTH] Activating seamless local session for:', email);
+        const isDemoOnboarded = selectedRole === 'BRAND' || email.includes('alex') || email.includes('chen');
         const fallbackUser: UserProfile = {
           id: selectedRole === 'BRAND' ? 'demo_brand_1' : 'demo_creator_1',
           email,
@@ -149,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           displayName: email.split('@')[0],
           creatorId: selectedRole === 'CREATOR' ? 'demo_creator_1' : undefined,
           brandId: selectedRole === 'BRAND' ? 'demo_brand_1' : undefined,
+          onboardingCompleted: isDemoOnboarded,
         };
         const fallbackToken = 'demo_token_' + Date.now();
         setToken(fallbackToken);
@@ -158,6 +164,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (selectedRole === 'BRAND') {
           router.push('/brand/dashboard');
+        } else if (!isDemoOnboarded) {
+          router.push('/creator/onboarding');
         } else {
           router.push('/creator/dashboard');
         }
@@ -208,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         creatorId: res.user.creatorId,
         brandId: res.user.brandId,
         displayName: displayName || email.split('@')[0],
+        onboardingCompleted: res.user.onboardingCompleted ?? (role === 'BRAND'),
       };
 
       setToken(activeToken);
@@ -216,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('crab_user', JSON.stringify(newUser));
 
       if (role === 'CREATOR') {
-        router.push('/creator/dashboard');
+        router.push('/creator/onboarding');
       } else {
         router.push('/brand/dashboard');
       }

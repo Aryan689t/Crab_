@@ -4,6 +4,7 @@ import {
   upsertCreatorProfile,
   getCreatorPublicProfile,
   getCreatorMetrics,
+  completeCreatorOnboarding,
 } from '../controllers/creatorController.js';
 import { getMyCreatorApplications } from '../controllers/applicationController.js';
 import { getMyCreatorCollaborations } from '../controllers/collaborationController.js';
@@ -23,6 +24,7 @@ export const creatorRouter = Router();
 // Current authenticated creator profile
 creatorRouter.get('/me', authenticateToken, requireRole('CREATOR'), getCreatorProfile);
 creatorRouter.patch('/me', authenticateToken, requireRole('CREATOR'), upsertCreatorProfile);
+creatorRouter.post('/me/onboarding', authenticateToken, requireRole('CREATOR'), completeCreatorOnboarding);
 creatorRouter.post('/profile', authenticateToken, requireRole('CREATOR'), upsertCreatorProfile);
 creatorRouter.get('/me/metrics', authenticateToken, requireRole('CREATOR'), getCreatorMetrics);
 creatorRouter.get('/me/applications', authenticateToken, requireRole('CREATOR'), getMyCreatorApplications);

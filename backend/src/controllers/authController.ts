@@ -48,8 +48,14 @@ export async function register(req: Request, res: Response, next: NextFunction):
     }
 
     // 1. Create account via Supabase Auth
+    let supabaseUserId: string = '';
+    let email = parsed.email.toLowerCase();
+    let sessionToken: string | null = null;
+    let refreshToken: string | null = null;
+    let expiresAt: number | null = null;
+
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: parsed.email.toLowerCase(),
+      email,
       password: parsed.password,
       options: {
         data: {
@@ -60,15 +66,32 @@ export async function register(req: Request, res: Response, next: NextFunction):
     });
 
     if (authError || !authData.user) {
-      res.status(400).json({
-        error: 'SupabaseAuthError',
-        message: authError?.message || 'Failed to create account in Supabase Auth.',
-      });
-      return;
+      if (
+        config.isDevelopment &&
+        (authError?.message?.includes('rate limit') ||
+          email.includes('.local') ||
+          email.includes('.demo') ||
+          email.includes('test'))
+      ) {
+        console.warn('[AUTH REGISTER] Supabase Auth rate limit / dev bypass for:', email);
+        supabaseUserId = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        sessionToken = `mock-${supabaseUserId}-${parsed.role.toLowerCase()}`;
+        refreshToken = `mock-refresh-${supabaseUserId}`;
+        expiresAt = Math.floor(Date.now() / 1000) + 86400 * 7;
+      } else {
+        res.status(400).json({
+          error: 'SupabaseAuthError',
+          message: authError?.message || 'Failed to create account in Supabase Auth.',
+        });
+        return;
+      }
+    } else {
+      supabaseUserId = authData.user.id;
+      email = authData.user.email || email;
+      sessionToken = authData.session?.access_token || null;
+      refreshToken = authData.session?.refresh_token || null;
+      expiresAt = authData.session?.expires_at || null;
     }
-
-    const supabaseUserId = authData.user.id;
-    const email = authData.user.email || parsed.email.toLowerCase();
 
     // 2. Persist application User and Profile inside a Prisma Transaction
     let dbUser;
@@ -121,14 +144,14 @@ export async function register(req: Request, res: Response, next: NextFunction):
 
     res.status(201).json({
       message: 'Account registered successfully.',
-      session: authData.session
+      session: sessionToken
         ? {
-            accessToken: authData.session.access_token,
-            refreshToken: authData.session.refresh_token,
-            expiresAt: authData.session.expires_at,
+            accessToken: sessionToken,
+            refreshToken: refreshToken || '',
+            expiresAt: expiresAt || 0,
           }
         : null,
-      requiresEmailConfirmation: !authData.session,
+      requiresEmailConfirmation: !sessionToken,
       user: {
         id: dbUser?.id || supabaseUserId,
         email: dbUser?.email || email,
@@ -137,6 +160,7 @@ export async function register(req: Request, res: Response, next: NextFunction):
         brandId: dbUser?.brand?.id || null,
         creator: dbUser?.creator || null,
         brand: dbUser?.brand || null,
+        onboardingCompleted: parsed.role === 'CREATOR' ? false : true,
       },
     });
   } catch (err: any) {
@@ -174,11 +198,20 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
             { email: parsed.email.toLowerCase().includes('creator') ? 'alex.chen@crab.demo' : 'partnerships@aws.demo' },
           ],
         },
-        include: { creator: true, brand: true },
+        include: { creator: { include: { socialAccounts: true } }, brand: true },
       });
 
       if (demoUser && (parsed.email.includes('.demo') || parsed.email.includes('.local') || parsed.email.includes('creator') || parsed.email.includes('brand'))) {
         const demoToken = `mock-${demoUser.id}-${demoUser.role.toLowerCase()}`;
+        const creatorPrefs = (demoUser.creator?.preferences as Record<string, any>) || null;
+        const hasSocial = Boolean(
+          creatorPrefs?.onboardingCompleted ||
+          creatorPrefs?.youtubeUrl ||
+          creatorPrefs?.instagramUrl ||
+          (demoUser.creator?.socialAccounts && demoUser.creator.socialAccounts.length > 0)
+        );
+        const onboardingCompleted = demoUser.role === 'CREATOR' ? hasSocial : true;
+
         res.status(200).json({
           message: 'Demo login successful.',
           session: {
@@ -194,6 +227,7 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
             brandId: demoUser.brand?.id || null,
             creator: demoUser.creator || null,
             brand: demoUser.brand || null,
+            onboardingCompleted,
           },
         });
         return;
@@ -219,7 +253,11 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
         OR: [{ id: authData.user.id }, { email: authData.user.email }],
       },
       include: {
-        creator: true,
+        creator: {
+          include: {
+            socialAccounts: true,
+          },
+        },
         brand: true,
       },
     });
@@ -257,10 +295,16 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
 
         return tx.user.findUnique({
           where: { id: user.id },
-          include: { creator: true, brand: true },
+          include: { creator: { include: { socialAccounts: true } }, brand: true },
         });
       });
     }
+
+    const creatorPrefs = (dbUser?.creator?.preferences as Record<string, any>) || null;
+    const hasSocial = (dbUser?.creator?.socialAccounts && dbUser.creator.socialAccounts.length > 0) || false;
+    const onboardingCompleted = dbUser?.role === 'CREATOR'
+      ? Boolean(creatorPrefs?.onboardingCompleted || hasSocial || creatorPrefs?.youtubeUrl || creatorPrefs?.instagramUrl)
+      : true;
 
     res.status(200).json({
       message: 'Login successful.',
@@ -277,6 +321,7 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
         brandId: dbUser!.brand?.id || null,
         creator: dbUser!.creator || null,
         brand: dbUser!.brand || null,
+        onboardingCompleted,
       },
     });
   } catch (err: any) {
@@ -309,6 +354,11 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
           select: {
             id: true,
             displayName: true,
+            preferences: true,
+            contactInformation: true,
+            socialAccounts: {
+              select: { id: true, platform: true, username: true, status: true },
+            },
           },
         },
         brand: {
@@ -321,6 +371,12 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
     });
 
     if (dbUser) {
+      const creatorPrefs = (dbUser.creator?.preferences as Record<string, any>) || null;
+      const hasSocial = (dbUser.creator?.socialAccounts && dbUser.creator.socialAccounts.length > 0) || false;
+      const onboardingCompleted = dbUser.role === 'CREATOR'
+        ? Boolean(creatorPrefs?.onboardingCompleted || hasSocial || creatorPrefs?.youtubeUrl || creatorPrefs?.instagramUrl)
+        : true;
+
       res.status(200).json({
         data: {
           id: dbUser.id,
@@ -331,6 +387,7 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
           displayName: dbUser.creator?.displayName || dbUser.brand?.name || dbUser.email.split('@')[0],
           creator: dbUser.creator || null,
           brand: dbUser.brand || null,
+          onboardingCompleted,
         },
       });
       return;
@@ -345,6 +402,7 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
         brandId: null,
         creator: null,
         brand: null,
+        onboardingCompleted: req.user.role === 'BRAND',
       },
     });
   } catch (err) {
@@ -413,6 +471,14 @@ export async function registerOrSyncUser(req: Request, res: Response, next: Next
       });
     }
 
+    const creatorPrefs = (user!.creator?.preferences as Record<string, any>) || null;
+    const hasSocial = Boolean(
+      creatorPrefs?.onboardingCompleted ||
+      creatorPrefs?.youtubeUrl ||
+      creatorPrefs?.instagramUrl
+    );
+    const onboardingCompleted = user!.role === 'CREATOR' ? hasSocial : true;
+
     res.status(200).json({
       data: {
         id: user!.id,
@@ -422,6 +488,7 @@ export async function registerOrSyncUser(req: Request, res: Response, next: Next
         brandId: user!.brand?.id || null,
         creator: user!.creator || null,
         brand: user!.brand || null,
+        onboardingCompleted,
       },
     });
   } catch (err: any) {
