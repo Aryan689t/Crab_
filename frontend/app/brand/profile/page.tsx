@@ -1,177 +1,234 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../../../lib/auth-context';
-
 import {
   Building2,
   Globe,
   Mail,
   MapPin,
-  Camera,
   Check,
-  RefreshCw,
-  Save
+  Save,
+  ShieldCheck,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
+import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 
 export default function BrandProfilePage() {
-  const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
-  
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
-  
+
   const [profile, setProfile] = useState({
-    name: 'Amazon Web Services',
+    name: 'Acme Cloud',
     description: 'Developer tools, cloud infrastructure, and AI engineering solutions.',
-    category: 'Technology',
-    website: 'https://aws.amazon.com',
-    email: 'partnerships@example.com',
-    location: 'Seattle, WA',
+    category: 'Technology & Cloud',
+    website: 'https://acmecloud.example.com',
+    email: 'partnerships@acmecloud.example.com',
+    location: 'Bengaluru, India',
+    targetMarkets: ['India', 'Global', 'North America'],
+    selectedNiches: ['Cloud Architecture', 'DevOps', 'Software Engineering', 'AI Tools'],
   });
 
-  useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        router.push('/login');
-        return;
-      }
-      if (user.role !== 'BRAND') {
-        router.push('/creator/dashboard');
-        return;
-      }
-      setTimeout(() => setLoading(false), 500);
-    }
-  }, [user, authLoading, router]);
+  const availableNiches = [
+    'Cloud Architecture',
+    'DevOps',
+    'Software Engineering',
+    'AI Tools',
+    'Web Design',
+    'Productivity & SaaS',
+    'Technical Hardware',
+  ];
+
+  const handleToggleNiche = (niche: string) => {
+    setProfile((prev) => {
+      const exists = prev.selectedNiches.includes(niche);
+      return {
+        ...prev,
+        selectedNiches: exists
+          ? prev.selectedNiches.filter((n) => n !== niche)
+          : [...prev.selectedNiches, niche],
+      };
+    });
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setSuccess(false);
-    
+
     setTimeout(() => {
       setSaving(false);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    }, 1000);
+    }, 800);
   };
 
-  if (authLoading || loading) {
-    return (
-      <div className="flex flex-col">
-        
-        <div className="flex-1 flex items-center justify-center text-[#8B90A5] text-sm">
-          <RefreshCw className="w-5 h-5 animate-spin mr-2 text-[#F4511E]" />
-          Loading Brand Profile...
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col">
-      
+    <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
+      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+        {/* 1. Unified Page Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <PortalPageHeader
+            eyebrow="Organization Identity"
+            titlePrefix="Edit your verified"
+            highlightText="brand profile."
+            description="Manage your public brand profile, category alignment, target creator niches, and commercial preferences."
+          />
 
-      <main className="w-full px-4 md:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[#17182B]">Brand Profile</h1>
-          <p className="text-sm text-[#626782] mt-1">Manage your public brand identity visible to creators.</p>
+          <Link
+            href="/brand/dashboard"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-[#E7E1DA] text-[#171717] hover:bg-[#F8F6F2] text-xs font-semibold shadow-xs transition self-start md:self-center shrink-0"
+          >
+            <span>View Dashboard</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#E7E8F0] shadow-sm overflow-hidden">
-          {/* Header Cover & Avatar */}
-          <div className="h-32 bg-gradient-to-r from-[#F4511E] to-[#FF8A65] relative">
-            <button className="absolute bottom-4 right-4 p-2 bg-white/20 hover:bg-white/30 text-white rounded-xl backdrop-blur-sm transition">
-              <Camera className="w-4 h-4" />
-            </button>
+        {/* 2. Brand Verification Status Pill Card */}
+        <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 rounded-xl bg-emerald-50 text-emerald-700">
+              <ShieldCheck className="w-5 h-5" />
+            </span>
+            <div>
+              <h4 className="text-xs font-bold text-[#171717]">
+                Verified Brand Partner
+              </h4>
+              <p className="text-xs text-[#737373]">
+                Your brand profile is active in CRAB's marketplace directory and vector index.
+              </p>
+            </div>
           </div>
-          
-          <div className="px-8 pb-8 pt-0 relative">
-            <div className="flex justify-between items-end mb-6 -mt-10">
-              <div className="w-24 h-24 rounded-2xl bg-white border-4 border-white shadow-sm flex items-center justify-center font-bold text-3xl text-[#17182B] bg-gradient-to-br from-gray-50 to-gray-200 relative group cursor-pointer">
-                {profile.name.substring(0, 2).toUpperCase()}
-                <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                  <Camera className="w-6 h-6 text-white" />
-                </div>
+
+          <span className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-xs font-bold">
+            Live in pgvector
+          </span>
+        </div>
+
+        {/* 3. Profile Edit Form */}
+        <form onSubmit={handleSave} className="space-y-6">
+          {/* Section A: Company Details */}
+          <div className="bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs space-y-5">
+            <div className="pb-3 border-b border-[#E7E1DA]">
+              <h3 className="text-sm font-bold text-[#171717]">Company & Channel Details</h3>
+              <p className="text-xs text-[#737373] mt-0.5">
+                Public representation shown in marketplace search and creator campaign dossiers.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#171717] block">Brand Name</label>
+                <input
+                  type="text"
+                  value={profile.name}
+                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] rounded-xl text-xs text-[#171717] focus:outline-none transition"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#171717] block">Primary Category</label>
+                <input
+                  type="text"
+                  value={profile.category}
+                  onChange={(e) => setProfile({ ...profile, category: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] rounded-xl text-xs text-[#171717] focus:outline-none transition"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#171717] block">Website URL</label>
+                <input
+                  type="text"
+                  value={profile.website}
+                  onChange={(e) => setProfile({ ...profile, website: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] rounded-xl text-xs text-[#171717] focus:outline-none transition"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#171717] block">Location / Base City</label>
+                <input
+                  type="text"
+                  value={profile.location}
+                  onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] rounded-xl text-xs text-[#171717] focus:outline-none transition"
+                />
               </div>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-[#17182B]">Brand Name</label>
-                  <input
-                    type="text"
-                    value={profile.name}
-                    onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] text-sm text-[#17182B] focus:outline-none focus:border-[#F4511E] focus:bg-white transition"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-[#17182B]">Category / Industry</label>
-                  <input
-                    type="text"
-                    value={profile.category}
-                    onChange={(e) => setProfile({ ...profile, category: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] text-sm text-[#17182B] focus:outline-none focus:border-[#F4511E] focus:bg-white transition"
-                  />
-                </div>
-                
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-xs font-medium text-[#17182B]">Description</label>
-                  <textarea
-                    rows={3}
-                    value={profile.description}
-                    onChange={(e) => setProfile({ ...profile, description: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] text-sm text-[#17182B] focus:outline-none focus:border-[#F4511E] focus:bg-white transition"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-[#17182B] flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-[#8B90A5]" /> Website
-                  </label>
-                  <input
-                    type="url"
-                    value={profile.website}
-                    onChange={(e) => setProfile({ ...profile, website: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] text-sm text-[#17182B] focus:outline-none focus:border-[#F4511E] focus:bg-white transition"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-[#17182B] flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-[#8B90A5]" /> Partnership Email
-                  </label>
-                  <input
-                    type="email"
-                    value={profile.email}
-                    onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] text-sm text-[#17182B] focus:outline-none focus:border-[#F4511E] focus:bg-white transition"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-[#E7E8F0] flex items-center justify-end">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-6 py-2.5 rounded-xl bg-[#F4511E] hover:bg-[#D94316] text-white text-sm font-semibold shadow-sm transition disabled:opacity-50 flex items-center gap-2"
-                >
-                  {saving ? (
-                    <><RefreshCw className="w-4 h-4 animate-spin" /> Saving...</>
-                  ) : success ? (
-                    <><Check className="w-4 h-4" /> Saved Successfully</>
-                  ) : (
-                    <><Save className="w-4 h-4" /> Save Changes</>
-                  )}
-                </button>
-              </div>
-            </form>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-[#171717] block">
+                Brand Description & Commercial Positioning
+              </label>
+              <textarea
+                rows={3}
+                value={profile.description}
+                onChange={(e) => setProfile({ ...profile, description: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] rounded-xl text-xs text-[#171717] focus:outline-none transition resize-none"
+              />
+            </div>
           </div>
-        </div>
+
+          {/* Section B: Target Creator Niches */}
+          <div className="bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs space-y-5">
+            <div className="pb-3 border-b border-[#E7E1DA]">
+              <h3 className="text-sm font-bold text-[#171717]">Target Creator Niches</h3>
+              <p className="text-xs text-[#737373] mt-0.5">
+                Select target content topics to prioritize in explainable semantic vector discovery.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {availableNiches.map((niche) => {
+                const isSelected = profile.selectedNiches.includes(niche);
+                return (
+                  <button
+                    key={niche}
+                    type="button"
+                    onClick={() => handleToggleNiche(niche)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 border ${
+                      isSelected
+                        ? 'bg-[#FF6B00] border-[#FF6B00] text-white shadow-xs'
+                        : 'bg-[#F8F6F2] border-[#E7E1DA] text-[#737373] hover:text-[#171717]'
+                    }`}
+                  >
+                    {isSelected && <Check className="w-3.5 h-3.5" />}
+                    <span>{niche}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Actions Bar */}
+          <div className="flex items-center justify-between pt-2">
+            {success ? (
+              <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+                <Check className="w-4 h-4" />
+                <span>Brand profile updated successfully!</span>
+              </span>
+            ) : (
+              <span className="text-xs text-[#737373]">
+                Changes persist immediately across your active campaigns.
+              </span>
+            )}
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#FF6B00] hover:bg-[#E56000] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              <span>{saving ? 'Saving...' : 'Save Brand Profile'}</span>
+            </button>
+          </div>
+        </form>
       </main>
     </div>
   );
