@@ -8,6 +8,7 @@ import { User, Building2, ArrowRight, CheckCircle2, Sparkles, Mail, Lock, AlertC
 
 export default function SignupPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('CREATOR');
+  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,6 +21,12 @@ export default function SignupPage() {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
+
+    const trimmedName = displayName.trim();
+    if (!trimmedName) {
+      setErrorMsg(selectedRole === 'CREATOR' ? 'Please enter your creator or display name.' : 'Please enter your brand or company name.');
+      return;
+    }
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
@@ -39,7 +46,7 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
-      await signup(trimmedEmail, password, selectedRole);
+      await signup(trimmedEmail, password, selectedRole, trimmedName);
     } catch (err: any) {
       const msg = err.message || 'Signup failed.';
       if (msg.includes('confirm your account') || msg.includes('Registration successful')) {
@@ -159,6 +166,23 @@ export default function SignupPage() {
 
           {/* Form */}
           <form onSubmit={handleSignup} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-[#17182B]">
+                {selectedRole === 'CREATOR' ? 'Creator / Display Name' : 'Brand / Company Name'}
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 absolute left-3.5 top-3.5 text-[#8B90A5]" />
+                <input
+                  type="text"
+                  required
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder={selectedRole === 'CREATOR' ? 'e.g. Aryan Sharma' : 'e.g. Acme Studio'}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] text-sm text-[#17182B] placeholder-[#8B90A5] focus:outline-none focus:border-[#8580E8] focus:bg-white transition"
+                />
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-[#17182B]">Work Email</label>
               <div className="relative">
