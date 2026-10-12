@@ -1,6 +1,6 @@
 {
   "name": "crab-backend",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "CRAB Backend API (Node.js, Express, TypeScript, Prisma, Supabase)",
   "main": "dist/index.js",
