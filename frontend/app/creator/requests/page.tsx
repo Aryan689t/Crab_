@@ -18,6 +18,7 @@ import {
   IndianRupee,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { StarRating } from '../../../components/ui/StarRating';
 
 interface RequestItem {
   id: string;
@@ -268,6 +269,7 @@ export default function CreatorRequestsPage() {
                           <span className="font-bold text-xs text-[#737373]">
                             {req.brand}
                           </span>
+                          <StarRating rating={4.8} size="xs" />
                           {req.isNew && (
                             <span className="w-2 h-2 rounded-full bg-[#FF6B00]" title="New invitation" />
                           )}
@@ -306,8 +308,11 @@ export default function CreatorRequestsPage() {
                 </div>
 
                 <div>
-                  <div className="text-xs font-semibold text-[#737373] uppercase tracking-wider">
-                    {selectedReq.brand}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-[#737373] uppercase tracking-wider">
+                      {selectedReq.brand}
+                    </span>
+                    <StarRating rating={4.8} size="xs" />
                   </div>
                   <h2 className="text-lg sm:text-xl font-bold text-[#171717] mt-0.5">
                     {selectedReq.title}

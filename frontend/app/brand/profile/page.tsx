@@ -15,6 +15,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { StarRating } from '../../../components/ui/StarRating';
 
 export default function BrandProfilePage() {
   const { user } = useAuth();
@@ -95,9 +96,12 @@ export default function BrandProfilePage() {
               <ShieldCheck className="w-5 h-5" />
             </span>
             <div>
-              <h4 className="text-xs font-bold text-[#171717]">
-                Verified Brand Partner
-              </h4>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-[#171717]">
+                  Verified Brand Partner
+                </h4>
+                <StarRating rating={4.9} size="xs" reviewCount={84} />
+              </div>
               <p className="text-xs text-[#737373]">
                 Your brand profile is active in CRAB's marketplace directory and vector index.
               </p>

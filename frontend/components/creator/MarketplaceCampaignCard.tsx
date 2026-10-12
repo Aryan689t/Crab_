@@ -3,12 +3,15 @@
 import React, { useState } from 'react';
 import { Bookmark, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { YouTubeIcon, InstagramIcon } from './BrandIcons';
+import { StarRating } from '../ui/StarRating';
 
 export interface CampaignData {
   id: string;
   title: string;
   brandName: string;
   brandLogo?: string;
+  brandRating?: number;
+  brandReviewCount?: number;
   category?: string;
   niches?: string[];
   budgetMin: number;
@@ -131,6 +134,7 @@ export function MarketplaceCampaignCard({
             <span className="text-xs font-semibold text-[#737373] tracking-wide truncate">
               {campaign.brandName}
             </span>
+            <StarRating rating={campaign.brandRating || 4.8} size="xs" />
           </div>
 
           {/* Title */}

@@ -20,6 +20,7 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { StarRating } from '../../../components/ui/StarRating';
 
 interface BrandCollaborationItem {
   id: string;
@@ -238,9 +239,10 @@ export default function BrandCollaborationsPage() {
                         <span className="text-[10px] font-bold uppercase tracking-wider text-[#737373]">
                           {collab.category}
                         </span>
-                        <span className="text-xs text-[#737373]">•</span>
-                        <span className="text-xs font-semibold text-[#171717]">
-                          Creator: {collab.creator.name} ({collab.creator.handle})
+                        <span className="text-xs font-semibold text-[#171717] flex items-center gap-1.5">
+                          <span>Creator: {collab.creator.name}</span>
+                          <StarRating rating={4.9} size="xs" />
+                          <span className="text-[#737373] font-normal">({collab.creator.handle})</span>
                         </span>
                       </div>
 

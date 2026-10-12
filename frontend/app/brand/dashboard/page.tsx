@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { StarRating } from '../../../components/ui/StarRating';
 
 const BrandPerformanceChart = dynamic(
   () => import('../../../components/brand/BrandPerformanceChart'),
@@ -506,6 +507,7 @@ export default function BrandDashboardPage() {
                         <h4 className="text-xs font-bold text-[#171717] truncate">
                           {app.creator.name}
                         </h4>
+                        <StarRating rating={4.9} size="xs" />
                         <span className="text-[11px] text-[#737373]">{app.creator.handle}</span>
                         <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[10px] font-bold">
                           {app.matchScore}% match
