@@ -457,8 +457,16 @@ export default function BrandFindCreatorsPage() {
 
         {/* 4. Invite to Campaign Modal Dialog */}
         {selectedCreatorId && activeCreator && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
-            <div className="bg-white rounded-2xl max-w-md w-full border border-[#E7E1DA] p-6 shadow-xl space-y-5">
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelectedCreatorId(null);
+            }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-md w-full border border-[#E7E1DA] p-6 shadow-xl space-y-5"
+            >
               <div className="flex items-center justify-between pb-3 border-b border-[#E7E1DA]">
                 <div className="flex items-center gap-2">
                   <Send className="w-4 h-4 text-[#FF6B00]" />

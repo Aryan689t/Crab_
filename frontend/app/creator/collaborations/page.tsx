@@ -758,8 +758,16 @@ export default function CreatorCollaborationsPage() {
 
       {/* Video Submission Modal */}
       {modalOpen && selectedCollab && selectedDeliverable && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-[#E7E1DA] max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in fade-in zoom-in-95">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-[#E7E1DA] max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in fade-in zoom-in-95"
+          >
             <div className="flex items-start justify-between border-b border-[#E7E1DA] pb-4">
               <div>
                 <span className="text-[11px] font-bold text-[#FF6B00] uppercase tracking-wider">
@@ -879,8 +887,14 @@ export default function CreatorCollaborationsPage() {
 
       {/* Manual Channel Connect Modal */}
       {manualConnectOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setManualConnectOpen(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
           <form
+            onClick={(e) => e.stopPropagation()}
             onSubmit={handleManualConnectSubmit}
             className="bg-white rounded-3xl border border-[#E7E1DA] max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95"
           >

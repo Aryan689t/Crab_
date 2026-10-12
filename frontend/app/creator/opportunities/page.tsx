@@ -1,22 +1,15 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMockStore, getStoredCreators } from '../../../mock/store';
 import { useAuth } from '../../../lib/auth-context';
-import { fetchApi, invalidateApiCache } from '../../../lib/api';
+import { fetchApi } from '../../../lib/api';
 import {
   Search,
-  CheckCircle2,
   X,
   ChevronDown,
   SlidersHorizontal,
-  Sparkles,
-  Send,
-  Calendar,
-  Layers,
-  IndianRupee,
-  ShieldCheck,
-  Check,
 } from 'lucide-react';
 
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
@@ -24,49 +17,56 @@ import {
   MarketplaceCampaignCard,
   CampaignData,
 } from '../../../components/creator/MarketplaceCampaignCard';
-import { StarRating } from '../../../components/ui/StarRating';
+import { CampaignDetailsDrawer } from '../../../components/creator/CampaignDetailsDrawer';
 
-export default function CreatorOpportunitiesPage() {
+function CreatorOpportunitiesContent() {
   const { campaigns: mockCampaigns, applications, applyToCampaign } = useMockStore();
   const { user, token } = useAuth();
-
-  const creators = getStoredCreators();
-  const creatorProfile = creators.find((c) => c.id === 'creator_01');
-  const creatorNiches = creatorProfile?.primaryNiches || [];
+  const searchParams = useSearchParams();
 
   const [dbCampaigns, setDbCampaigns] = useState<any[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<any | null>(null);
-  const [pitchNote, setPitchNote] = useState('');
-  const [applySuccess, setApplySuccess] = useState(false);
+  const [appliedIds, setAppliedIds] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'pay' | 'ending'>('match');
-  const [isLoading, setIsLoading] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
 
+  // 1. Fetch real active campaigns and creator's applications from backend
   useEffect(() => {
     let mounted = true;
-    const loadCampaigns = async () => {
+    const loadData = async () => {
       try {
         if (token) {
-          const res = await fetchApi<{ data: any[] }>('/api/campaigns', {}, token);
-          if (mounted && res?.data && res.data.length > 0) {
-            setDbCampaigns(res.data);
+          const [campaignsRes, appsRes] = await Promise.allSettled([
+            fetchApi<{ data: any[] }>('/api/campaigns', {}, token),
+            fetchApi<{ data: any[] }>('/api/creators/me/applications', {}, token),
+          ]);
+
+          if (!mounted) return;
+
+          if (campaignsRes.status === 'fulfilled' && campaignsRes.value?.data && campaignsRes.value.data.length > 0) {
+            setDbCampaigns(campaignsRes.value.data);
+          }
+
+          if (appsRes.status === 'fulfilled' && appsRes.value?.data) {
+            const appIds = appsRes.value.data.map((a: any) => a.campaignId || a.campaign?.id).filter(Boolean);
+            setAppliedIds((prev) => Array.from(new Set([...prev, ...appIds])));
           }
         }
       } catch (err) {
-        console.warn('[OPPORTUNITIES] Backend campaigns fetch fallback:', err);
+        console.warn('[OPPORTUNITIES] Backend fetch fallback:', err);
       }
     };
 
-    loadCampaigns();
+    loadData();
 
     return () => {
       mounted = false;
     };
   }, [token]);
 
-  // Transform database campaigns into CampaignItem shape, combining with store mocks
+  // 2. Transform database campaigns into clean shape
   const campaigns = useMemo(() => {
     if (!dbCampaigns || dbCampaigns.length === 0) {
       return mockCampaigns;
@@ -76,21 +76,26 @@ export default function CreatorOpportunitiesPage() {
       const niches = c.creatorNiche
         ? c.creatorNiche.split(',').map((s: string) => s.trim())
         : c.aiProfile?.inferredNiches || ['Technology', 'AI Tools'];
+
       const timelineStr =
         typeof c.timeline === 'object' && c.timeline?.display
           ? c.timeline.display
           : typeof c.timeline === 'object' && c.timeline?.start
-          ? `${c.timeline.start} - ${c.timeline.end}`
-          : 'Active';
+          ? `${c.timeline.start} – ${c.timeline.end}`
+          : 'Active Sponsorship Window';
 
       return {
         id: c.id,
         title: c.title,
         brandName: c.brand?.name || 'Partner Brand',
-        brandLogo: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=100',
+        brandLogo: c.brand?.logo || undefined,
+        brandCategory: c.brand?.category || 'Technology',
+        brandDescription: c.brand?.description || undefined,
+        brandWebsite: c.brand?.website || undefined,
         productOrService: c.productOrService || c.title,
         category: c.brand?.category || 'Technology',
         objective: c.objective || c.description,
+        description: c.description || c.objective,
         budgetMin: Number(c.budgetMin) || 20000,
         budgetMax: Number(c.budgetMax) || 50000,
         currency: 'INR',
@@ -102,12 +107,9 @@ export default function CreatorOpportunitiesPage() {
           'Pinned comment link & social post',
         ],
         timeline: timelineStr,
-        exclusivity: c.exclusivity || 'No category exclusivity',
+        exclusivity: c.exclusivity || 'No competitor integrations for 14 days',
+        usageRights: c.usageRights || 'Organic brand channels & social reposts (60 days)',
         status: c.status || 'ACTIVE',
-        invitedCount: 3,
-        appliedCount: 5,
-        acceptedCount: 1,
-        totalSpent: 0,
         createdAt: c.createdAt || new Date().toISOString(),
         aiBriefSummary:
           c.aiProfile?.semanticSummary ||
@@ -121,11 +123,24 @@ export default function CreatorOpportunitiesPage() {
     return [...transformedDb, ...extraMocks];
   }, [dbCampaigns, mockCampaigns]);
 
+  // 3. Auto-open campaign drawer if ?campaign=id is present in URL
+  useEffect(() => {
+    const campaignIdParam = searchParams.get('campaign');
+    if (campaignIdParam && campaigns.length > 0) {
+      const matched = campaigns.find((c) => c.id === campaignIdParam);
+      if (matched) {
+        setSelectedCampaign(matched);
+      }
+    }
+  }, [searchParams, campaigns]);
+
+  // Categories filter list
   const categories = useMemo(() => {
     const unique = new Set(campaigns.map((c) => c.category).filter(Boolean));
     return ['All', ...Array.from(unique)];
   }, [campaigns]);
 
+  // Filtered & sorted campaign list
   const sortedAndFilteredCampaigns = useMemo(() => {
     let filtered = campaigns.filter(
       (c) => c.status === 'ACTIVE' || c.status === 'DRAFT'
@@ -154,51 +169,20 @@ export default function CreatorOpportunitiesPage() {
     });
   }, [campaigns, activeCategory, sortBy, searchQuery]);
 
-  const [appliedIds, setAppliedIds] = useState<string[]>([]);
-
-  const handleApply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCampaign) return;
-
-    if (token) {
-      try {
-        await fetchApi(
-          `/api/campaigns/${selectedCampaign.id}/applications`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              pitch: pitchNote,
-              proposedRate: selectedCampaign.budgetMin || 25000,
-            }),
-          },
-          token
-        );
-        invalidateApiCache('/applications');
-        invalidateApiCache('/creators');
-        invalidateApiCache('/campaigns');
-      } catch (err) {
-        console.warn('[OPPORTUNITIES] Backend apply submission fallback:', err);
-      }
-    }
-
-    setAppliedIds((prev) => [...prev, selectedCampaign.id]);
-    applyToCampaign(selectedCampaign.id, 'creator_01', pitchNote);
-    setApplySuccess(true);
-    setTimeout(() => {
-      setApplySuccess(false);
-      setSelectedCampaign(null);
-      setPitchNote('');
-    }, 1800);
+  const isAlreadyApplied = (campaignId?: string) => {
+    if (!campaignId) return false;
+    return appliedIds.includes(campaignId) || applications.some((a) => a.campaignId === campaignId);
   };
 
-  const isAlreadyApplied = (campaignId: string) => {
-    return appliedIds.includes(campaignId) || applications.some((a) => a.campaignId === campaignId);
+  const handleApplySuccess = (campaignId: string) => {
+    setAppliedIds((prev) => Array.from(new Set([...prev, campaignId])));
+    applyToCampaign(campaignId, user?.id || 'creator_01', 'Applied via Campaign Drawer');
   };
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
-        {/* 1. Unified Page Header */}
+        {/* 1. Page Header */}
         <PortalPageHeader
           titlePrefix="Discover campaigns that"
           highlightText="fit you."
@@ -222,6 +206,7 @@ export default function CreatorOpportunitiesPage() {
                   type="button"
                   onClick={() => setSearchQuery('')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[#737373] hover:text-[#171717]"
+                  aria-label="Clear search"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -241,7 +226,7 @@ export default function CreatorOpportunitiesPage() {
                   {sortBy === 'match'
                     ? 'Best match'
                     : sortBy === 'pay'
-                    ? 'Highest pay'
+                    ? 'Highest budget'
                     : 'Ending soon'}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 text-[#737373]" />
@@ -313,7 +298,7 @@ export default function CreatorOpportunitiesPage() {
           )}
         </div>
 
-        {/* 4. Three-to-Four Column Marketplace Grid */}
+        {/* 4. Three-to-Four Column Marketplace Grid (Unchanged position, never squeezed) */}
         {sortedAndFilteredCampaigns.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 border border-[#E7E1DA] text-center space-y-3 shadow-xs">
             <div className="w-12 h-12 rounded-full bg-[#FFF4EB] text-[#FF6B00] flex items-center justify-center mx-auto">
@@ -347,158 +332,24 @@ export default function CreatorOpportunitiesPage() {
           </div>
         )}
 
-        {/* 5. Campaign Details & Application Slide-Over Drawer */}
-        {selectedCampaign && (
-          <div className="fixed inset-0 z-50 overflow-hidden flex justify-end bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in">
-            <div
-              className="w-full max-w-xl bg-white h-full shadow-2xl flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Drawer Header */}
-              <div className="p-6 border-b border-[#E7E1DA] flex items-start justify-between gap-4 sticky top-0 bg-white/95 backdrop-blur-md z-10">
-                <div className="space-y-1">
-                  <div className="text-[11px] font-mono font-semibold tracking-wider text-[#FF6B00] uppercase">
-                    {selectedCampaign.category || 'PARTNERSHIP BRIEF'}
-                  </div>
-                  <h2 className="text-xl font-bold text-[#171717]">
-                    {selectedCampaign.title}
-                  </h2>
-                  <div className="text-xs text-[#737373] flex items-center gap-1.5 flex-wrap pt-0.5">
-                    <span>Sponsored by</span>
-                    <span className="font-semibold text-[#171717]">
-                      {selectedCampaign.brandName}
-                    </span>
-                    <StarRating rating={selectedCampaign.brandRating || 4.8} size="xs" />
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedCampaign(null)}
-                  className="p-2 rounded-xl hover:bg-[#F8F6F2] text-[#737373] hover:text-[#171717] transition"
-                  aria-label="Close drawer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Drawer Body */}
-              <div className="p-6 space-y-6 flex-1">
-                {/* Match Highlight Pill */}
-                {selectedCampaign.matchScore && (
-                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold text-emerald-900">
-                          {selectedCampaign.matchScore}% Match for your channel
-                        </div>
-                        <div className="text-[11px] text-emerald-700">
-                          Aligned with your tech educator niche and average video performance.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Key Metrics Strip */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA]">
-                    <div className="text-[11px] text-[#737373]">Budget / Payout</div>
-                    <div className="text-base font-bold text-[#171717] mt-0.5">
-                      ₹{selectedCampaign.budgetMin?.toLocaleString()} - ₹
-                      {selectedCampaign.budgetMax?.toLocaleString()}
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA]">
-                    <div className="text-[11px] text-[#737373]">Timeline / Deadline</div>
-                    <div className="text-base font-bold text-[#171717] mt-0.5 truncate">
-                      {selectedCampaign.timeline || selectedCampaign.deadline || 'Flexible'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Objective */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#737373]">
-                    Campaign Objective
-                  </h4>
-                  <p className="text-xs sm:text-sm text-[#383838] leading-relaxed">
-                    {selectedCampaign.objective ||
-                      selectedCampaign.aiBriefSummary ||
-                      'Seeking tech and developer creators to showcase key workflow benefits with authentic tutorial content.'}
-                  </p>
-                </div>
-
-                {/* Deliverables */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#737373]">
-                    Expected Deliverables
-                  </h4>
-                  <ul className="space-y-2">
-                    {(
-                      selectedCampaign.deliverables || [
-                        '1 Dedicated long-form review video with product walk-through',
-                        '1 Pinned comment with tracking link',
-                        'Social post amplification',
-                      ]
-                    ).map((del: string, idx: number) => (
-                      <li
-                        key={idx}
-                        className="text-xs text-[#383838] flex items-center gap-2"
-                      >
-                        <Check className="w-4 h-4 text-[#FF6B00] shrink-0" />
-                        <span>{del}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Pitch Submission Form */}
-                <form onSubmit={handleApply} className="space-y-4 pt-4 border-t border-[#E7E1DA]">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#171717]">
-                      Your Creator Pitch Note
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={pitchNote}
-                      onChange={(e) => setPitchNote(e.target.value)}
-                      placeholder="Explain why your audience fits this campaign and your creative concept..."
-                      className="w-full p-3 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] text-xs text-[#171717] placeholder:text-[#737373] focus:outline-none transition resize-none"
-                    />
-                  </div>
-
-                  {applySuccess ? (
-                    <div className="p-3.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center justify-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>Application submitted successfully!</span>
-                    </div>
-                  ) : (
-                    <button
-                      type="submit"
-                      disabled={isAlreadyApplied(selectedCampaign.id)}
-                      className={`w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-xs cursor-pointer ${
-                        isAlreadyApplied(selectedCampaign.id)
-                          ? 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
-                          : 'bg-[#FF6B00] hover:bg-[#e05e00] text-white'
-                      }`}
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>
-                        {isAlreadyApplied(selectedCampaign.id)
-                          ? 'Already Applied'
-                          : 'Submit Application with Verified Profile'}
-                      </span>
-                    </button>
-                  )}
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* 5. Campaign Details Drawer Overlay */}
+        <CampaignDetailsDrawer
+          campaign={selectedCampaign}
+          isOpen={Boolean(selectedCampaign)}
+          onClose={() => setSelectedCampaign(null)}
+          applied={isAlreadyApplied(selectedCampaign?.id)}
+          onApplySuccess={handleApplySuccess}
+          token={token}
+        />
       </main>
     </div>
+  );
+}
+
+export default function CreatorOpportunitiesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#F8F6F2] p-8 animate-pulse" />}>
+      <CreatorOpportunitiesContent />
+    </Suspense>
   );
 }
