@@ -406,57 +406,36 @@
         return inkW * sx;
       }
 
-      function drawLogo(x) {
+      function drawCentralTagline(x) {
         var cx = d2sx(RING.cx);
         var cy = d2sy(RING.cy);
 
-        // Proportionally reduced dimensions for balanced centering within rotating ring
-        var bw = 132 * K;
-        var bh = 132 * K;
-        var br = 28 * K;
-        var gap = 26 * K;
-        var textFontSize = 116 * K;
-        var cFontSize = 96 * K;
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var fontSize = Math.round(Math.max(16 * dpr, 102 * K));
 
         x.save();
-        x.font = '700 ' + Math.round(textFontSize) + 'px ' + SERIF;
-        var textMetrics = x.measureText('CRAB');
-        var tw = textMetrics.width;
-        var totalW = bw + gap + tw;
+        x.font = '800 ' + fontSize + 'px "Inter", "Helvetica Neue", -apple-system, system-ui, sans-serif';
+        if ('letterSpacing' in x) {
+          x.letterSpacing = Math.round(-2.5 * K) + 'px';
+        }
 
-        var startX = cx - totalW / 2;
-        var badgeCenterX = startX + bw / 2;
-        var badgeCenterY = cy;
+        // Stepped diagonally matching the reference screenshot exactly
+        var lines = [
+          { text: 'Connect.', dx: -68 * K, dy: -118 * K },
+          { text: 'Create.',  dx:   2 * K, dy:    4 * K },
+          { text: 'Grow.',    dx:  72 * K, dy:  126 * K }
+        ];
 
-        // 1. Signature orange rounded badge with subtle ambient glow
-        x.save();
-        x.translate(badgeCenterX, badgeCenterY);
-        x.shadowColor = 'rgba(255, 102, 0, 0.30)';
-        x.shadowBlur = Math.round(12 * K);
-        x.shadowOffsetY = Math.round(4 * K);
-        x.fillStyle = '#ff6600';
-        roundRectPath(x, bw, bh, br);
-        x.fill();
-        x.restore();
-
-        // 2. White "C" monogram centered in badge
-        x.save();
-        x.fillStyle = '#ffffff';
-        x.font = '700 ' + Math.round(cFontSize) + 'px ' + SERIF;
+        // Subtle ambient halo ensuring 100% crisp contrast and readability
+        x.shadowColor = 'rgba(249, 247, 243, 0.95)';
+        x.shadowBlur = Math.round(14 * K);
+        x.fillStyle = '#050505';
         x.textAlign = 'center';
         x.textBaseline = 'middle';
-        x.fillText('C', badgeCenterX, badgeCenterY - Math.round(2 * K));
-        x.restore();
 
-        // 3. Editorial wordmark "CRAB"
-        x.save();
-        x.fillStyle = '#181816';
-        x.font = '700 ' + Math.round(textFontSize) + 'px ' + SERIF;
-        x.textAlign = 'left';
-        x.textBaseline = 'middle';
-        x.fillText('CRAB', startX + bw + gap, cy - Math.round(1 * K));
-        x.restore();
-
+        for (var i = 0; i < lines.length; i++) {
+          x.fillText(lines[i].text, cx + lines[i].dx, cy + lines[i].dy);
+        }
         x.restore();
       }
 
@@ -464,7 +443,7 @@
         headLayer = mkc(Math.max(1, W), Math.max(1, H));
         var x = headLayer.getContext('2d');
         if (showLogo) {
-          drawLogo(x);
+          drawCentralTagline(x);
         } else {
           for (var i = 0; i < HEAD.length; i++) {
             var h = HEAD[i];
@@ -536,12 +515,10 @@
         }
         list.sort(function (a, b) { return a.z - b.z; });
 
-        var drawnText = false;
         for (i = 0; i < list.length; i++) {
-          if (!drawnText && list[i].z > 0) { ctx.drawImage(headLayer, 0, 0); drawnText = true; }
           drawTile(list[i].i, list[i].psi);
         }
-        if (!drawnText) ctx.drawImage(headLayer, 0, 0);
+        ctx.drawImage(headLayer, 0, 0);
       }
 
       var t0 = performance.now(), tNow = 0, playing = true;
