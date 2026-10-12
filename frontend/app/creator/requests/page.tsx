@@ -143,13 +143,11 @@ export default function CreatorRequestsPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* 1. Page Header */}
         <PortalPageHeader
-          eyebrow="Direct Inquiries"
           titlePrefix="Review collaboration"
           highlightText="invitations."
-          description="Brands that evaluated your AI intelligence profile and invited you directly to sponsor their campaigns."
         />
 
         {/* Action Toast Feedback */}
@@ -168,34 +166,7 @@ export default function CreatorRequestsPage() {
           </div>
         )}
 
-        {/* 2. Top Summary Strip */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">New Invitations</div>
-            <div className="text-2xl font-bold text-[#FF6B00] mt-1">2</div>
-            <div className="text-[11px] text-[#FF6B00] font-semibold mt-0.5">Awaiting your response</div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">In Discussion</div>
-            <div className="text-2xl font-bold text-[#171717] mt-1">1</div>
-            <div className="text-[11px] text-[#737373] mt-0.5">Active conversations</div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">Offers Received</div>
-            <div className="text-2xl font-bold text-emerald-700 mt-1">1</div>
-            <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">Ready for signature</div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">Average Budget</div>
-            <div className="text-2xl font-bold text-[#171717] mt-1">₹51,000</div>
-            <div className="text-[11px] text-[#737373] mt-0.5">Per dedicated video</div>
-          </div>
-        </section>
-
-        {/* 3. Filter Bar */}
+        {/* 2. Filter Bar */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E7E1DA] shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
             {TABS.map((tab) => (

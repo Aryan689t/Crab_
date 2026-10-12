@@ -37,10 +37,12 @@ export function Navbar() {
     <header className="bg-white sticky top-0 z-50 flex flex-col border-b border-[#E7E8F0] shadow-sm">
       <div className="max-w-7xl mx-auto px-6 h-16 w-full flex items-center justify-between border-b border-[#E7E8F0]">
         {/* Logo and Brand */}
-        <Link href="/" className="flex items-center space-x-3 hover:opacity-90 transition">
-          <div className="w-9 h-9 rounded-xl bg-[#F4511E] flex items-center justify-center text-white font-bold text-lg shadow-sm">
-            🦀
-          </div>
+        <Link href="/" className="flex items-center space-x-3 hover:opacity-90 transition group">
+          <img
+            src="/crab-logo.png"
+            alt="CRAB"
+            className="w-9 h-9 object-contain group-hover:scale-105 transition-transform"
+          />
           <div>
             <span className="font-bold text-lg tracking-tight text-[#17182B]">CRAB</span>
             <span className="hidden sm:inline-block ml-2 text-xs text-[#8B90A5] border-l border-[#E7E8F0] pl-2 font-medium">

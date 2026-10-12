@@ -148,13 +148,11 @@ export default function CreatorApplicationsPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* 1. Page Header */}
         <PortalPageHeader
-          eyebrow="Collaboration Pipeline"
           titlePrefix="Track your"
           highlightText="brand applications."
-          description="Review response status, proposal details, and brand conversations in real-time."
           action={
             <Link
               href="/creator/opportunities"
@@ -166,40 +164,7 @@ export default function CreatorApplicationsPage() {
           }
         />
 
-        {/* 2. Top Summary KPI Cards */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">Total Applied</div>
-            <div className="text-2xl font-bold text-[#171717] mt-1">
-              {APPLICATIONS_DATA.length}
-            </div>
-            <div className="text-[11px] text-[#737373] mt-0.5">Across all campaigns</div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">In Discussion / Offers</div>
-            <div className="text-2xl font-bold text-[#FF6B00] mt-1">3</div>
-            <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">
-              Active negotiation
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">Under Review</div>
-            <div className="text-2xl font-bold text-[#171717] mt-1">1</div>
-            <div className="text-[11px] text-[#737373] mt-0.5">Brand review pending</div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">Acceptance Rate</div>
-            <div className="text-2xl font-bold text-emerald-700 mt-1">75%</div>
-            <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">
-              Above creator average
-            </div>
-          </div>
-        </section>
-
-        {/* 3. Search and Tabs Bar */}
+        {/* 2. Search and Tabs Bar */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E7E1DA] shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
             {/* Filter Tabs */}

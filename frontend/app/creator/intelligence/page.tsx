@@ -79,13 +79,11 @@ export default function CreatorIntelligencePage() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* 1. Page Header */}
         <PortalPageHeader
-          eyebrow="Semantic Dossier"
           titlePrefix="Creator intelligence &"
           highlightText="brand alignment."
-          description="High-dimensional semantic representation extracted by Gemini AI from your channel transcripts and stored in pgvector."
           action={
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold shadow-2xs">
               <Database className="w-3.5 h-3.5 text-emerald-600" />

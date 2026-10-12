@@ -132,13 +132,11 @@ export default function CreatorProfilePage() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* 1. Page Header */}
         <PortalPageHeader
-          eyebrow="Profile Identity"
           titlePrefix="Edit your verified"
           highlightText="creator profile."
-          description="Update your bio, primary niches, baseline commercial pricing, and public information shown to brand sponsors."
           action={
             <Link
               href="/creator/dashboard"

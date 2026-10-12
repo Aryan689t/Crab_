@@ -118,43 +118,14 @@ export default function CreatorCollaborationsPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* 1. Page Header */}
         <PortalPageHeader
-          eyebrow="Active Partnerships"
           titlePrefix="Active and past"
           highlightText="collaborations."
-          description="Manage contracted campaigns, milestone deliverables, asset submissions, and verified payouts."
         />
 
-        {/* 2. Top Summary KPI Cards */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">In Progress</div>
-            <div className="text-2xl font-bold text-[#FF6B00] mt-1">2</div>
-            <div className="text-[11px] text-[#737373] mt-0.5">Active contracts</div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">Completed</div>
-            <div className="text-2xl font-bold text-emerald-700 mt-1">1</div>
-            <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">100% delivered</div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">Total Contract Value</div>
-            <div className="text-2xl font-bold text-[#171717] mt-1">₹2,55,000</div>
-            <div className="text-[11px] text-[#737373] mt-0.5">Across partnerships</div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xs">
-            <div className="text-[11px] text-[#737373] font-medium">On-Time Rate</div>
-            <div className="text-2xl font-bold text-[#171717] mt-1">100%</div>
-            <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">Reliable creator status</div>
-          </div>
-        </section>
-
-        {/* 3. Filter Bar */}
+        {/* 2. Filter Bar */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E7E1DA] shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
             {TABS.map((tab) => (

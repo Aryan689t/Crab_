@@ -13,6 +13,15 @@ const nextConfig = {
       'tailwind-merge',
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/profile',
+        destination: '/creator/profile',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

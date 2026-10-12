@@ -50,9 +50,11 @@ export function BrandSidebar({ isOpen, setIsOpen }: BrandSidebarProps) {
             href="/"
             className="flex items-center gap-2.5 py-1.5 px-2 hover:opacity-90 transition group"
           >
-            <div className="w-8 h-8 rounded-full bg-[#FF6B00] flex items-center justify-center font-bold text-white text-base shadow-2xs shrink-0">
-              C
-            </div>
+            <img
+              src="/crab-logo.png"
+              alt="CRAB"
+              className="w-8 h-8 object-contain shrink-0 group-hover:scale-105 transition-transform"
+            />
             <div className="flex items-baseline gap-1.5">
               <span className="font-bold text-xl tracking-tight text-[#171717]">
                 CRAB
@@ -149,18 +151,22 @@ export function BrandSidebar({ isOpen, setIsOpen }: BrandSidebarProps) {
 }
 
 export const Logo = () => (
-  <Link href="/" className="flex items-center gap-2.5 py-1 px-2">
-    <div className="w-8 h-8 rounded-full bg-[#FF6B00] flex items-center justify-center font-bold text-white text-base shadow-2xs">
-      C
-    </div>
+  <Link href="/" className="flex items-center gap-2.5 py-1 px-2 group">
+    <img
+      src="/crab-logo.png"
+      alt="CRAB"
+      className="w-8 h-8 object-contain shrink-0 group-hover:scale-105 transition-transform"
+    />
     <span className="font-bold text-xl tracking-tight text-[#171717]">CRAB</span>
   </Link>
 );
 
 export const LogoIcon = () => (
-  <Link href="/" className="flex items-center justify-center py-1">
-    <div className="w-8 h-8 rounded-full bg-[#FF6B00] flex items-center justify-center font-bold text-white text-base shadow-2xs">
-      C
-    </div>
+  <Link href="/" className="flex items-center justify-center py-1 group">
+    <img
+      src="/crab-logo.png"
+      alt="CRAB"
+      className="w-8 h-8 object-contain shrink-0 group-hover:scale-105 transition-transform"
+    />
   </Link>
 );
