@@ -12,13 +12,21 @@ healthRouter.get('/', async (req: Request, res: Response) => {
 
   if (config.databaseUrl) {
     try {
-      // Test basic database connectivity
-      await prisma.$queryRaw`SELECT 1 as health_check`;
+      // Test basic database connectivity with a timeout guard
+      const dbCheck = prisma.$queryRaw`SELECT 1 as health_check`;
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Database query timed out')), 2000)
+      );
+      await Promise.race([dbCheck, timeout]);
       dbStatus = 'connected';
 
       // Check if pgvector extension is installed
       try {
-        const result: any = await prisma.$queryRaw`SELECT extname FROM pg_extension WHERE extname = 'vector'`;
+        const vecCheck = prisma.$queryRaw`SELECT extname FROM pg_extension WHERE extname = 'vector'`;
+        const vecTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Vector query timed out')), 1000)
+        );
+        const result: any = await Promise.race([vecCheck, vecTimeout]);
         pgvectorStatus = result.length > 0 ? 'available' : 'extension_not_found';
       } catch (vecErr) {
         pgvectorStatus = 'check_failed';

@@ -59,7 +59,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Root health check & API routes
+// Root endpoint & health routes
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'CRAB Backend API',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+    },
+  });
+});
 app.use('/health', healthRouter);
 app.use('/api', apiRouter);
 
@@ -78,11 +88,13 @@ app.use(errorHandler);
 const isMainModule = process.argv[1]?.includes('index.ts') || process.argv[1]?.includes('dist\\index.js') || process.argv[1]?.includes('dist/index.js');
 if (isMainModule && process.env.NODE_ENV !== 'test') {
   validateEnv();
-  app.listen(config.port, () => {
+  const HOST = process.env.HOST || '0.0.0.0';
+  app.listen(config.port, HOST, () => {
     console.log(`\n==================================================`);
     console.log(`🚀 CRAB Backend Server started successfully`);
-    console.log(`📡 URL: http://localhost:${config.port}`);
-    console.log(`🩺 Health check: http://localhost:${config.port}/health`);
+    console.log(`📡 Host: ${HOST} | Port: ${config.port}`);
+    console.log(`📡 URL: http://${HOST}:${config.port}`);
+    console.log(`🩺 Health check: http://${HOST}:${config.port}/health`);
     console.log(`🛠️  Environment: ${config.nodeEnv}`);
     console.log(`==================================================\n`);
   });
