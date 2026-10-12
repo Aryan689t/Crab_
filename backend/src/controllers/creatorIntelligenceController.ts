@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { analyzeAndSaveCreatorIntelligence } from '../services/creatorIntelligenceService.js';
+import {
+  analyzeAndSaveCreatorIntelligence,
+  DatabasePersistenceError,
+} from '../services/creatorIntelligenceService.js';
 import { GeminiServiceError } from '../integrations/gemini/index.js';
 
 export async function getCreatorIntelligence(
@@ -10,20 +13,32 @@ export async function getCreatorIntelligence(
 ): Promise<void> {
   try {
     const userId = req.user?.id;
+    const userEmail = req.user?.email;
 
-    if (!userId) {
+    if (!userId && !userEmail) {
       res.status(401).json({
         error: 'Authentication required.',
       });
       return;
     }
 
-    const creator = await prisma.creator.findUnique({
-      where: { userId },
-      select: {
-        aiProfile: true,
-      },
-    });
+    let creator = userId
+      ? await prisma.creator.findUnique({
+          where: { userId },
+          select: {
+            aiProfile: true,
+          },
+        })
+      : null;
+
+    if (!creator && userEmail) {
+      creator = await prisma.creator.findFirst({
+        where: { user: { email: userEmail } },
+        select: {
+          aiProfile: true,
+        },
+      });
+    }
 
     if (!creator) {
       res.status(404).json({
@@ -55,8 +70,9 @@ export async function analyzeCreatorIntelligence(
 ): Promise<void> {
   try {
     const userId = req.user?.id;
+    const userEmail = req.user?.email;
 
-    if (!userId) {
+    if (!userId && !userEmail) {
       res.status(401).json({
         error: 'Authentication required.',
       });
@@ -70,7 +86,8 @@ export async function analyzeCreatorIntelligence(
       return;
     }
 
-    const profile = await analyzeAndSaveCreatorIntelligence(userId);
+    // Strictly scope analysis to the authenticated user identity (never an untrusted client ID).
+    const profile = await analyzeAndSaveCreatorIntelligence(userId || '', userEmail);
 
     res.status(200).json({
       data: {
@@ -103,6 +120,20 @@ export async function analyzeCreatorIntelligence(
       return;
     }
 
+    if (err instanceof DatabasePersistenceError) {
+      res.status(500).json({
+        error: 'DatabaseError',
+        message: 'Failed to persist creator intelligence profile.',
+      });
+      return;
+    }
+
+    // Log diagnostic error without sensitive secrets or full payload
+    console.error('[CREATOR_INTELLIGENCE_CONTROLLER] Unexpected failure during analysis:', {
+      error: err instanceof Error ? err.message : 'Unknown error',
+    });
+
     next(err);
   }
 }
+
