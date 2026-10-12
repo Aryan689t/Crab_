@@ -16,16 +16,16 @@ import {
   Database,
   Layers,
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from 'recharts';
+import dynamic from 'next/dynamic';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+
+const RoiTrendChart = dynamic(
+  () => import('../../../components/brand/RoiTrendChart'),
+  {
+    ssr: false,
+    loading: () => <div className="h-64 w-full pt-3 animate-pulse bg-neutral-100 rounded-xl" />,
+  }
+);
 
 const CHART_DATA = [
   { name: 'Jan', roi: 2.1, benchmark: 1.8 },
@@ -166,45 +166,7 @@ export default function BrandIntelligencePage() {
                 </span>
               </div>
 
-              <div className="h-64 w-full pt-3">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={CHART_DATA} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="4 4" stroke="#E7E1DA" vertical={false} />
-                    <XAxis
-                      dataKey="name"
-                      stroke="#737373"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={{ stroke: '#E7E1DA' }}
-                    />
-                    <YAxis
-                      stroke="#737373"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={{ stroke: '#E7E1DA' }}
-                      tickFormatter={(v) => `${v}x`}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#FFFFFF',
-                        borderRadius: '12px',
-                        border: '1px solid #E7E1DA',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
-                        fontSize: '12px',
-                        color: '#171717',
-                      }}
-                      formatter={(val: any) => [`${val}× ROI`, 'Measured ROI']}
-                    />
-                    <Bar
-                      dataKey="roi"
-                      fill="#FF6B00"
-                      radius={[6, 6, 0, 0]}
-                      barSize={32}
-                      isAnimationActive={false}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <RoiTrendChart data={CHART_DATA} />
             </div>
           </div>
 

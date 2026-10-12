@@ -114,9 +114,9 @@ export default function BrandCampaignsListPage() {
     };
   }, [token]);
 
-  const allCampaigns = useMemo(() => {
+  const allCampaigns: CampaignItem[] = useMemo(() => {
     if (dbCampaigns.length === 0) return DEFAULT_CAMPAIGNS;
-    return dbCampaigns.map((c) => ({
+    return dbCampaigns.map((c: any): CampaignItem => ({
       id: c.id,
       title: c.title,
       category: c.brand?.category || 'Technology',
@@ -139,7 +139,7 @@ export default function BrandCampaignsListPage() {
         searchQuery.trim() === '' ||
         camp.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         camp.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        camp.niches.some((n) => n.toLowerCase().includes(searchQuery.toLowerCase()));
+        camp.niches.some((n: string) => n.toLowerCase().includes(searchQuery.toLowerCase()));
       return matchStatus && matchSearch;
     });
   }, [allCampaigns, statusFilter, searchQuery]);
@@ -299,7 +299,7 @@ export default function BrandCampaignsListPage() {
 
                   {/* Niches Pills */}
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {camp.niches.map((niche) => (
+                    {camp.niches.map((niche: string) => (
                       <span
                         key={niche}
                         className="px-2 py-0.5 rounded-md bg-[#F8F6F2] border border-[#E7E1DA] text-[10px] font-medium text-[#737373]"

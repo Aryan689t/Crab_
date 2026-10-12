@@ -76,6 +76,7 @@ export function BrandSidebar({ isOpen, setIsOpen }: BrandSidebarProps) {
                 <Link
                   key={item.label}
                   href={item.href}
+                  prefetch={false}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition group relative ${
                     isActive
                       ? 'bg-[#FFF4EB] text-[#FF6B00]'
@@ -116,6 +117,7 @@ export function BrandSidebar({ isOpen, setIsOpen }: BrandSidebarProps) {
               <Link
                 key={item.label}
                 href={item.href}
+                prefetch={false}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition group ${
                   isActive
                     ? 'bg-[#FFF4EB] text-[#FF6B00]'
