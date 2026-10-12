@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@700;800;900&family=Newsreader:ital,opsz,wght@0,6..72,700;0,6..72,800&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,700;0,6..72,800;1,6..72,700;1,6..72,800&display=swap"
     rel="stylesheet">
   <style>
     html,
@@ -20,24 +20,112 @@
       background: #F9F7F3;
       overflow: hidden;
       user-select: none;
-      -webkit-user-select: none
+      -webkit-user-select: none;
     }
 
     body {
-      -webkit-font-smoothing: antialiased
+      -webkit-font-smoothing: antialiased;
+      position: relative;
     }
 
     canvas {
       display: block;
       width: 100vw;
       height: 100vh;
-      background: #F9F7F3
+      background: #F9F7F3;
+    }
+
+    .center-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      pointer-events: none;
+      width: 92%;
+      max-width: 580px;
+      z-index: 10;
+      padding: 0 16px;
+      box-sizing: border-box;
+    }
+
+    .hero-title {
+      margin: 0;
+      padding: 0;
+      font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
+      font-weight: 700;
+      color: #181816;
+      text-transform: uppercase;
+      letter-spacing: -0.015em;
+      line-height: 1.08;
+      font-size: clamp(1.2rem, 3.1vw, 2.35rem);
+      text-shadow: 0 0 20px rgba(249, 247, 243, 0.95), 0 0 40px rgba(249, 247, 243, 0.9);
+    }
+
+    .hero-title .title-line {
+      display: block;
+      white-space: nowrap;
+    }
+
+    .hero-title .accent-orange {
+      font-style: italic;
+      color: #ff6600;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .hero-quote-box {
+      margin-top: clamp(8px, 1.3vw, 16px);
+      max-width: clamp(260px, 44vw, 470px);
+      text-align: center;
+    }
+
+    .hero-quote-text {
+      margin: 0;
+      padding: 0;
+      font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
+      font-style: italic;
+      font-weight: 400;
+      color: #57534e;
+      font-size: clamp(0.68rem, 1.0vw, 0.82rem);
+      line-height: 1.42;
+      text-shadow: 0 0 14px rgba(249, 247, 243, 0.95);
+    }
+
+    .hero-quote-author {
+      margin-top: clamp(3px, 0.45vw, 6px);
+      font-family: 'JetBrains Mono', Menlo, Consolas, monospace;
+      font-weight: 500;
+      font-size: clamp(0.58rem, 0.8vw, 0.7rem);
+      color: #ff6600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      text-shadow: 0 0 10px rgba(249, 247, 243, 0.95);
     }
   </style>
 </head>
 
 <body>
   <canvas id="stage"></canvas>
+  <div class="center-container">
+    <h1 class="hero-title">
+      <span class="title-line">YOUR CREATIVITY</span>
+      <span class="title-line">DESERVES <em class="accent-orange">THE RIGHT</em></span>
+      <span class="title-line">CONNECTIONS.</span>
+    </h1>
+    <div class="hero-quote-box">
+      <p class="hero-quote-text">
+        [1] &ldquo;True alignment isn't vanity reach—it's shared identity, genuine audience affinity, and collaboration that feels completely natural to both sides.&rdquo;
+      </p>
+      <div class="hero-quote-author">
+        — CRAB Founding Principle
+      </div>
+    </div>
+  </div>
   <script>
     (function () {
       'use strict';
@@ -407,36 +495,7 @@
       }
 
       function drawCentralTagline(x) {
-        var cx = d2sx(RING.cx);
-        var cy = d2sy(RING.cy);
-
-        var dpr = Math.min(window.devicePixelRatio || 1, 2);
-        var fontSize = Math.round(Math.max(16 * dpr, 102 * K));
-
-        x.save();
-        x.font = '800 ' + fontSize + 'px "Inter", "Helvetica Neue", -apple-system, system-ui, sans-serif';
-        if ('letterSpacing' in x) {
-          x.letterSpacing = Math.round(-2.5 * K) + 'px';
-        }
-
-        // Stepped diagonally matching the reference screenshot exactly
-        var lines = [
-          { text: 'Connect.', dx: -68 * K, dy: -118 * K },
-          { text: 'Create.',  dx:   2 * K, dy:    4 * K },
-          { text: 'Grow.',    dx:  72 * K, dy:  126 * K }
-        ];
-
-        // Subtle ambient halo ensuring 100% crisp contrast and readability
-        x.shadowColor = 'rgba(249, 247, 243, 0.95)';
-        x.shadowBlur = Math.round(14 * K);
-        x.fillStyle = '#050505';
-        x.textAlign = 'center';
-        x.textBaseline = 'middle';
-
-        for (var i = 0; i < lines.length; i++) {
-          x.fillText(lines[i].text, cx + lines[i].dx, cy + lines[i].dy);
-        }
-        x.restore();
+        // Inner text and quote are rendered via responsive styled HTML overlay (.center-container)
       }
 
       function buildHead() {
