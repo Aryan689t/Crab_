@@ -27,6 +27,15 @@ export const config = {
     instagramAppId: process.env.INSTAGRAM_APP_ID || '',
     instagramAppSecret: process.env.INSTAGRAM_APP_SECRET || '',
   },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/api/social/youtube/callback',
+  },
+  youtube: {
+    apiKey: process.env.YOUTUBE_API_KEY || '',
+    webhookSecret: process.env.YOUTUBE_WEBHOOK_SECRET || '',
+  },
   isDevelopment: (process.env.NODE_ENV || 'development') === 'development',
 };
 

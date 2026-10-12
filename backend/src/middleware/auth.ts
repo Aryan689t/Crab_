@@ -82,9 +82,16 @@ export async function authenticateToken(
 
   // 2. In development mode, allow instant mock/demo tokens
   if (config.isDevelopment && token.startsWith('mock-')) {
-    const parts = token.split('-');
-    const userIdOrPart = parts[1];
-    const rolePart = parts[2]?.toUpperCase() === 'BRAND' ? 'BRAND' : 'CREATOR';
+    const withoutPrefix = token.slice(5); // strip "mock-"
+    const lastDashIndex = withoutPrefix.lastIndexOf('-');
+    let userIdOrPart = withoutPrefix;
+    let rolePart: 'CREATOR' | 'BRAND' = 'CREATOR';
+
+    if (lastDashIndex !== -1) {
+      userIdOrPart = withoutPrefix.slice(0, lastDashIndex);
+      const roleStr = withoutPrefix.slice(lastDashIndex + 1).toUpperCase();
+      rolePart = roleStr === 'BRAND' ? 'BRAND' : 'CREATOR';
+    }
 
     const dbUser = await prisma.user.findFirst({
       where: userIdOrPart ? {

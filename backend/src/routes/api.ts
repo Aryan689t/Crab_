@@ -8,6 +8,7 @@ import { socialRouter } from './social.js';
 import { applicationRouter } from './applications.js';
 import { conversationRouter } from './conversations.js';
 import { requestRouter } from './requests.js';
+import { collaborationRouter } from './collaborations.js';
 
 export const apiRouter = Router();
 
@@ -19,6 +20,7 @@ apiRouter.use('/campaigns', campaignRouter);
 apiRouter.use('/social', socialRouter);
 apiRouter.use('/applications', applicationRouter);
 apiRouter.use('/application', applicationRouter);
+apiRouter.use('/collaborations', collaborationRouter);
 apiRouter.use('/conversations', conversationRouter);
 apiRouter.use('/conversation', conversationRouter);
 apiRouter.use('/requests', requestRouter);
