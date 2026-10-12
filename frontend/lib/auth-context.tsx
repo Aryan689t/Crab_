@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from './supabase';
-import { fetchApi } from './api';
+import { fetchApi, invalidateApiCache } from './api';
 
 export type UserRole = 'CREATOR' | 'BRAND';
 
@@ -38,12 +38,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Validate or restore session from backend on mount
   useEffect(() => {
+    let isSubscribed = true;
+
     const initializeAuth = async () => {
       const savedToken = localStorage.getItem('crab_auth_token');
       const savedUserStr = localStorage.getItem('crab_user');
 
       if (!savedToken) {
-        setLoading(false);
+        if (isSubscribed) setLoading(false);
         return;
       }
 
@@ -51,34 +53,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (savedUserStr) {
         try {
           const parsedUser = JSON.parse(savedUserStr);
-          setUser(parsedUser);
-          setToken(savedToken);
-          setLoading(false);
+          if (isSubscribed) {
+            setUser(parsedUser);
+            setToken(savedToken);
+            setLoading(false);
+          }
         } catch {
           // ignore parsing error
         }
       }
 
       try {
-        setToken(savedToken);
-        // Call backend /api/auth/me in background to verify real identity and load latest DB profile
+        if (isSubscribed) setToken(savedToken);
+        // Call backend /api/auth/me (safely deduplicated by fetchApi) to verify real identity and load latest DB profile
         const res = await fetchApi<{ data: UserProfile }>('/api/auth/me', {}, savedToken);
+        if (!isSubscribed) return;
         if (res?.data) {
           setUser(res.data);
           localStorage.setItem('crab_user', JSON.stringify(res.data));
         }
       } catch (err: any) {
+        if (!isSubscribed) return;
         console.warn('[AUTH] Saved session expired or invalid:', err.message);
         localStorage.removeItem('crab_auth_token');
         localStorage.removeItem('crab_user');
         setToken(null);
         setUser(null);
       } finally {
-        setLoading(false);
+        if (isSubscribed) setLoading(false);
       }
     };
 
     initializeAuth();
+
+    return () => {
+      isSubscribed = false;
+    };
   }, []);
 
   const login = async (email: string, password = 'Password123!', selectedRole: UserRole = 'CREATOR') => {
@@ -185,6 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    invalidateApiCache();
     setUser(null);
     setToken(null);
     localStorage.removeItem('crab_auth_token');

@@ -65,21 +65,40 @@ export default function CreatorDashboardPage() {
         return;
       }
 
+    const fetchAllData = async (authToken: string) => {
+      const [profileRes, metricsRes, contentRes, intelRes, accountsRes] = await Promise.allSettled([
+        fetchApi<any>('/api/creators/me', {}, authToken),
+        fetchApi<any>('/api/creators/me/metrics', {}, authToken),
+        fetchApi<any>('/api/creators/me/content', {}, authToken),
+        fetchApi<any>('/api/creators/me/intelligence', {}, authToken),
+        fetchApi<any>('/api/social/accounts', {}, authToken),
+      ]);
+
+      if (!mounted) return;
+
+      if (profileRes.status === 'fulfilled' && profileRes.value?.data) {
+        setProfile(profileRes.value.data);
+      }
+      if (metricsRes.status === 'fulfilled' && metricsRes.value?.data) {
+        setMetrics(metricsRes.value.data);
+      }
+      if (contentRes.status === 'fulfilled' && contentRes.value?.data) {
+        setContentList(contentRes.value.data);
+      }
+      if (intelRes.status === 'fulfilled' && intelRes.value?.data) {
+        setIntelligence(intelRes.value.data);
+      }
+      if (accountsRes.status === 'fulfilled' && accountsRes.value?.data) {
+        setAccounts(accountsRes.value.data);
+      }
+    };
+
       const loadInitialData = async () => {
+        if (!token) return;
         setLoading(true);
         try {
-          if (token) {
-            const profileRes = await fetchApi<any>('/api/creators/me', {}, token).catch(() => null);
-            if (!mounted) return;
-            if (profileRes?.data) setProfile(profileRes.data);
-            
-            // Unblock the main UI as soon as profile is ready
-            setLoading(false);
-
-            // Fetch secondary data without blocking the UI
-            loadSecondaryData(token, mounted);
-          }
-        } catch (err) {
+          await fetchAllData(token);
+        } finally {
           if (mounted) setLoading(false);
         }
       };
@@ -90,22 +109,7 @@ export default function CreatorDashboardPage() {
     return () => {
       mounted = false;
     };
-  }, [user, authLoading, token, router]);
-
-  const loadSecondaryData = async (authToken: string, mounted = true) => {
-    const [metricsRes, contentRes, intelRes, accountsRes] = await Promise.all([
-      fetchApi<any>('/api/creators/me/metrics', {}, authToken).catch(() => null),
-      fetchApi<any>('/api/creators/me/content', {}, authToken).catch(() => null),
-      fetchApi<any>('/api/creators/me/intelligence', {}, authToken).catch(() => null),
-      fetchApi<any>('/api/social/accounts', {}, authToken).catch(() => null),
-    ]);
-
-    if (!mounted) return;
-    if (metricsRes?.data) setMetrics(metricsRes.data);
-    if (contentRes?.data) setContentList(contentRes.data);
-    if (intelRes?.data) setIntelligence(intelRes.data);
-    if (accountsRes?.data) setAccounts(accountsRes.data);
-  };
+  }, [user?.id, user?.role, authLoading, token, router]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -113,9 +117,12 @@ export default function CreatorDashboardPage() {
     try {
       if (token) {
         await fetchApi('/api/social/accounts/social_yt_01/sync', { method: 'POST' }, token);
-        const profileRes = await fetchApi<any>('/api/creators/me', {}, token).catch(() => null);
-        if (profileRes?.data) setProfile(profileRes.data);
-        await loadSecondaryData(token);
+        const [profileRes, metricsRes] = await Promise.allSettled([
+          fetchApi<any>('/api/creators/me', {}, token),
+          fetchApi<any>('/api/creators/me/metrics', {}, token),
+        ]);
+        if (profileRes.status === 'fulfilled' && profileRes.value?.data) setProfile(profileRes.value.data);
+        if (metricsRes.status === 'fulfilled' && metricsRes.value?.data) setMetrics(metricsRes.value.data);
         setSyncSuccess(true);
         setTimeout(() => setSyncSuccess(false), 4000);
       }

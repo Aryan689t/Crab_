@@ -21,19 +21,67 @@ export async function getCreatorProfile(req: Request, res: Response, next: NextF
 
     let creator = null;
     try {
-      creator = await prisma.creator.findFirst({
-        where: {
-          OR: [{ userId: req.user.id }, { user: { email: req.user.email } }],
-        },
-        include: {
-          socialAccounts: true,
-          aiProfile: true,
-          metricSnapshots: {
-            orderBy: { recordedAt: 'desc' },
-            take: 1,
+      // Find creator using unique userId index
+      creator = await prisma.creator.findUnique({
+        where: { userId: req.user.id },
+        select: {
+          id: true,
+          userId: true,
+          displayName: true,
+          bio: true,
+          location: true,
+          contactInformation: true,
+          profileImageUrl: true,
+          preferences: true,
+          createdAt: true,
+          updatedAt: true,
+          socialAccounts: {
+            select: { id: true, platform: true, username: true, status: true },
+          },
+          aiProfile: {
+            select: {
+              id: true,
+              primaryNiches: true,
+              secondaryNiches: true,
+              contentStyle: true,
+              audienceSummary: true,
+              brandSuitability: true,
+            },
           },
         },
       });
+
+      // Fallback to email lookup if user id was not matched directly
+      if (!creator && req.user.email) {
+        creator = await prisma.creator.findFirst({
+          where: { user: { email: req.user.email } },
+          select: {
+            id: true,
+            userId: true,
+            displayName: true,
+            bio: true,
+            location: true,
+            contactInformation: true,
+            profileImageUrl: true,
+            preferences: true,
+            createdAt: true,
+            updatedAt: true,
+            socialAccounts: {
+              select: { id: true, platform: true, username: true, status: true },
+            },
+            aiProfile: {
+              select: {
+                id: true,
+                primaryNiches: true,
+                secondaryNiches: true,
+                contentStyle: true,
+                audienceSummary: true,
+                brandSuitability: true,
+              },
+            },
+          },
+        });
+      }
     } catch (err) {
       console.warn('[CREATOR] DB read failed, falling back to mock response.');
     }

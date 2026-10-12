@@ -27,6 +27,7 @@ export function CreatorSidebar({ isOpen, setIsOpen }: CreatorSidebarProps) {
   const { logout, user } = useAuth();
 
   const navItems = [
+    { label: 'Overview', href: '/creator/dashboard', icon: <Search className="w-5 h-5 text-neutral-700 dark:text-neutral-200 shrink-0" /> },
     { label: 'Discover', href: '/creator/opportunities', icon: <Search className="w-5 h-5 text-neutral-700 dark:text-neutral-200 shrink-0" /> },
     { label: 'Applications', href: '/creator/applications', icon: <ClipboardList className="w-5 h-5 text-neutral-700 dark:text-neutral-200 shrink-0" /> },
     { label: 'Requests (5)', href: '/creator/requests', icon: <Inbox className="w-5 h-5 text-neutral-700 dark:text-neutral-200 shrink-0" /> },

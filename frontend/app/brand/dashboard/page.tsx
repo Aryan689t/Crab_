@@ -57,7 +57,7 @@ export default function BrandDashboardPage() {
     return () => {
       mounted = false;
     };
-  }, [user, authLoading, token, router]);
+  }, [user?.id, user?.role, authLoading, token, router]);
 
   if (authLoading || loading) {
     return (

@@ -299,13 +299,24 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
       return;
     }
 
-    const dbUser = await prisma.user.findFirst({
-      where: {
-        OR: [{ id: req.user.id }, { email: req.user.email }],
-      },
-      include: {
-        creator: true,
-        brand: true,
+    const dbUser = await prisma.user.findUnique({
+      where: req.user.id ? { id: req.user.id } : { email: req.user.email },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        creator: {
+          select: {
+            id: true,
+            displayName: true,
+          },
+        },
+        brand: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
 
@@ -317,6 +328,7 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
           role: dbUser.role,
           creatorId: dbUser.creator?.id || null,
           brandId: dbUser.brand?.id || null,
+          displayName: dbUser.creator?.displayName || dbUser.brand?.name || dbUser.email.split('@')[0],
           creator: dbUser.creator || null,
           brand: dbUser.brand || null,
         },

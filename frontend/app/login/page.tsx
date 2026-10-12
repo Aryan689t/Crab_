@@ -36,7 +36,7 @@ export default function LoginPage() {
     setErrorMsg(null);
     setLoading(true);
     try {
-      const demoEmail = demoRole === 'CREATOR' ? 'tech.creator@crab-platform.local' : 'acme.brand@crab-platform.local';
+      const demoEmail = demoRole === 'CREATOR' ? 'alex.chen@crab.demo' : 'partnerships@aws.demo';
       await login(demoEmail, 'Password123!', demoRole);
     } catch (err: any) {
       setErrorMsg(err.message || 'Demo login failed.');
@@ -155,34 +155,40 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Quick Demo Section */}
+          {/* Try Demo Section */}
           <div className="pt-4 border-t border-[#E7E8F0] space-y-3">
-            <p className="text-[10px] font-bold text-[#8B90A5] uppercase tracking-wider text-center">
-              Quick One-Click Demo Mode
-            </p>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-[#17182B] uppercase tracking-wider flex items-center space-x-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#F4511E]" />
+                <span>Try Demo</span>
+              </span>
+              <span className="text-[10px] text-[#8B90A5] font-medium">Instant judge access</span>
+            </div>
             <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
+                disabled={loading}
                 onClick={() => handleQuickDemoLogin('CREATOR')}
-                className="p-3.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] hover:bg-[#F3F3FC] hover:border-[#8580E8]/40 text-left transition flex flex-col justify-between space-y-1 group"
+                className="p-3.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] hover:bg-[#F3F3FC] hover:border-[#8580E8] text-left transition flex flex-col justify-between space-y-1.5 group disabled:opacity-50"
               >
-                <span className="text-xs font-bold text-[#17182B] flex items-center space-x-1.5">
+                <span className="text-xs font-bold text-[#17182B] flex items-center space-x-1.5 group-hover:text-[#8580E8] transition-colors">
                   <User className="w-4 h-4 text-[#8580E8]" />
-                  <span>Demo Creator</span>
+                  <span>Explore as Creator</span>
                 </span>
-                <span className="text-[11px] text-[#626782]">Alex Tech Labs</span>
+                <span className="text-[11px] text-[#626782]">Alex Chen (Tech & AI)</span>
               </button>
 
               <button
                 type="button"
+                disabled={loading}
                 onClick={() => handleQuickDemoLogin('BRAND')}
-                className="p-3.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] hover:bg-[#FFF5F2] hover:border-[#F4511E]/40 text-left transition flex flex-col justify-between space-y-1 group"
+                className="p-3.5 rounded-xl border border-[#E7E8F0] bg-[#F8F9FC] hover:bg-[#FFF5F2] hover:border-[#F4511E] text-left transition flex flex-col justify-between space-y-1.5 group disabled:opacity-50"
               >
-                <span className="text-xs font-bold text-[#17182B] flex items-center space-x-1.5">
+                <span className="text-xs font-bold text-[#17182B] flex items-center space-x-1.5 group-hover:text-[#F4511E] transition-colors">
                   <Building2 className="w-4 h-4 text-[#F4511E]" />
-                  <span>Demo Brand</span>
+                  <span>Explore as Brand</span>
                 </span>
-                <span className="text-[11px] text-[#626782]">Acme Cloud</span>
+                <span className="text-[11px] text-[#626782]">AWS Partnerships</span>
               </button>
             </div>
           </div>

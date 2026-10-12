@@ -17,6 +17,33 @@ declare global {
   }
 }
 
+import crypto from 'crypto';
+
+interface CachedAuthUser {
+  user: AuthenticatedUser;
+  expiresAtMs: number;
+}
+
+// Bounded in-memory token cache (max 200 entries, 5-minute TTL)
+const AUTH_CACHE_MAX_SIZE = 200;
+const AUTH_CACHE_TTL_MS = 5 * 60 * 1000;
+const authCache = new Map<string, CachedAuthUser>();
+
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Clears cached identity for a specific token or clears all caches.
+ */
+export function invalidateAuthCache(token?: string): void {
+  if (token) {
+    authCache.delete(hashToken(token));
+  } else {
+    authCache.clear();
+  }
+}
+
 /**
  * Middleware to verify Supabase JWT / Bearer Token.
  * If credentials are not yet configured in development, allows simulated dev tokens
@@ -27,6 +54,7 @@ export async function authenticateToken(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  const start = Date.now();
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({
@@ -37,8 +65,22 @@ export async function authenticateToken(
   }
 
   const token = authHeader.split(' ')[1];
+  const tokenHash = hashToken(token);
+  const now = Date.now();
 
-  // In development mode, allow instant mock/demo tokens to bypass Supabase JWT network calls
+  // 1. Check secure in-memory cache first
+  const cached = authCache.get(tokenHash);
+  if (cached) {
+    if (cached.expiresAtMs > now) {
+      req.user = cached.user;
+      next();
+      return;
+    }
+    // Expired
+    authCache.delete(tokenHash);
+  }
+
+  // 2. In development mode, allow instant mock/demo tokens
   if (config.isDevelopment && token.startsWith('mock-')) {
     const parts = token.split('-');
     const userIdOrPart = parts[1];
@@ -54,21 +96,29 @@ export async function authenticateToken(
       } : { role: rolePart as any },
     });
 
-    if (dbUser) {
-      req.user = {
-        id: dbUser.id,
-        email: dbUser.email,
-        role: dbUser.role,
-      };
-      next();
-      return;
-    }
+    const userObj: AuthenticatedUser = dbUser
+      ? {
+          id: dbUser.id,
+          email: dbUser.email,
+          role: dbUser.role,
+        }
+      : {
+          id: userIdOrPart || 'demo-user',
+          email: `${userIdOrPart || 'demo'}@crab-platform.local`,
+          role: rolePart as any,
+        };
 
-    req.user = {
-      id: userIdOrPart || 'demo-user',
-      email: `${userIdOrPart || 'demo'}@crab-platform.local`,
-      role: rolePart as any,
-    };
+    // Store in bounded cache
+    if (authCache.size >= AUTH_CACHE_MAX_SIZE) {
+      const oldestKey = authCache.keys().next().value;
+      if (oldestKey) authCache.delete(oldestKey);
+    }
+    authCache.set(tokenHash, {
+      user: userObj,
+      expiresAtMs: now + AUTH_CACHE_TTL_MS,
+    });
+
+    req.user = userObj;
     next();
     return;
   }
@@ -85,6 +135,7 @@ export async function authenticateToken(
 
   try {
     const { data, error } = await supabase.auth.getUser(token);
+
     if (error || !data.user) {
       res.status(401).json({
         error: 'InvalidToken',
@@ -105,12 +156,23 @@ export async function authenticateToken(
       }
     }
 
-    req.user = {
+    const verifiedUser: AuthenticatedUser = {
       id: data.user.id,
       email: data.user.email || '',
       role,
     };
 
+    // Cache verified user identity bounded by token expiration or 5 min max
+    if (authCache.size >= AUTH_CACHE_MAX_SIZE) {
+      const oldestKey = authCache.keys().next().value;
+      if (oldestKey) authCache.delete(oldestKey);
+    }
+    authCache.set(tokenHash, {
+      user: verifiedUser,
+      expiresAtMs: now + AUTH_CACHE_TTL_MS,
+    });
+
+    req.user = verifiedUser;
     next();
   } catch (err) {
     next(err);
