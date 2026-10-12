@@ -5,21 +5,11 @@ import Link from 'next/link';
 import { useAuth } from '../../../lib/auth-context';
 import { fetchApi } from '../../../lib/api';
 import {
-  Layers,
   Plus,
   Users,
-  DollarSign,
-  Calendar,
-  Sparkles,
-  ArrowRight,
-  TrendingUp,
-  CheckCircle2,
-  Clock,
-  RefreshCw,
   Search,
   ExternalLink,
   ChevronRight,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 
@@ -144,19 +134,14 @@ export default function BrandCampaignsListPage() {
     });
   }, [allCampaigns, statusFilter, searchQuery]);
 
-  const totalBudget = allCampaigns.reduce((acc, c) => acc + c.budgetMax, 0);
-  const totalReach = allCampaigns.reduce((acc, c) => acc + c.requiredReach, 0);
-
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* 1. Unified Page Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <PortalPageHeader
-            eyebrow="Campaign Management"
             titlePrefix="Manage your brand"
             highlightText="campaigns."
-            description="Create, monitor, and scale creator partnerships. Track budget allocation and verified deliverable completion."
           />
 
           <Link
@@ -168,55 +153,7 @@ export default function BrandCampaignsListPage() {
           </Link>
         </div>
 
-        {/* 2. Campaign Metrics Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
-            <div className="flex items-center justify-between text-[#737373]">
-              <span className="text-xs font-semibold uppercase tracking-wider">
-                Total Campaigns
-              </span>
-              <span className="p-2 rounded-xl bg-[#FFF4EB] text-[#FF6B00]">
-                <Layers className="w-4 h-4" />
-              </span>
-            </div>
-            <div className="text-2xl font-bold text-[#171717]">{allCampaigns.length}</div>
-            <p className="text-[11px] text-emerald-700 font-medium">
-              {allCampaigns.filter((c) => c.status === 'ACTIVE').length} active sprints
-            </p>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
-            <div className="flex items-center justify-between text-[#737373]">
-              <span className="text-xs font-semibold uppercase tracking-wider">
-                Audience Reach Target
-              </span>
-              <span className="p-2 rounded-xl bg-[#FFF4EB] text-[#FF6B00]">
-                <Users className="w-4 h-4" />
-              </span>
-            </div>
-            <div className="text-2xl font-bold text-[#171717]">
-              {totalReach.toLocaleString()}
-            </div>
-            <p className="text-[11px] text-[#737373]">Qualified developer impressions</p>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
-            <div className="flex items-center justify-between text-[#737373]">
-              <span className="text-xs font-semibold uppercase tracking-wider">
-                Committed Budget
-              </span>
-              <span className="p-2 rounded-xl bg-[#FFF4EB] text-[#FF6B00]">
-                <DollarSign className="w-4 h-4" />
-              </span>
-            </div>
-            <div className="text-2xl font-bold text-[#17182B]">
-              ₹{totalBudget.toLocaleString()}
-            </div>
-            <p className="text-[11px] text-[#737373]">Escrow protected</p>
-          </div>
-        </div>
-
-        {/* 3. Toolbar & Status Filter */}
+        {/* 2. Toolbar & Status Filter */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E7E1DA] shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           {/* Search Input */}
           <div className="relative flex-1">
