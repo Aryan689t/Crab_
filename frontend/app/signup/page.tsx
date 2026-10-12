@@ -36,10 +36,12 @@ export default function SignupPage() {
     <div className="min-h-screen bg-[#F8F9FC] flex flex-col justify-between">
       {/* Header */}
       <header className="px-8 h-20 flex items-center justify-between border-b border-[#E7E8F0] bg-white">
-        <Link href="/" className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#F4511E] flex items-center justify-center text-white font-bold text-xl shadow-sm">
-            🦀
-          </div>
+        <Link href="/" className="flex items-center space-x-3 group">
+          <img
+            src="/crab-logo.png"
+            alt="CRAB"
+            className="w-10 h-10 object-contain group-hover:scale-105 transition-transform"
+          />
           <div>
             <span className="font-bold text-xl tracking-tight text-[#17182B]">CRAB</span>
             <span className="hidden sm:inline-block ml-2 text-xs text-[#8B90A5] border-l border-[#E7E8F0] pl-2 font-medium">
@@ -66,15 +68,19 @@ export default function SignupPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div
               onClick={() => setSelectedRole('CREATOR')}
-              className={`p-5 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between space-y-3 ${
+              className={`p-5 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between space-y-3 relative group ${
                 selectedRole === 'CREATOR'
                   ? 'border-[#8580E8] bg-[#F3F3FC]'
                   : 'border-[#E7E8F0] bg-white hover:border-[#8580E8]/50'
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 text-[#8580E8] flex items-center justify-center">
-                  <User className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-purple-100 text-[#8580E8] flex items-center justify-center p-2">
+                  <img
+                    src="/crab-logo.png"
+                    alt="Creator"
+                    className="w-full h-full object-contain"
+                  />
                 </div>
                 {selectedRole === 'CREATOR' && (
                   <CheckCircle2 className="w-5 h-5 text-[#8580E8]" />
@@ -90,18 +96,22 @@ export default function SignupPage() {
 
             <div
               onClick={() => setSelectedRole('BRAND')}
-              className={`p-5 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between space-y-3 ${
+              className={`p-5 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between space-y-3 relative group ${
                 selectedRole === 'BRAND'
-                  ? 'border-[#F4511E] bg-[#FFF5F2]'
-                  : 'border-[#E7E8F0] bg-white hover:border-[#F4511E]/50'
+                  ? 'border-[#FF6B00] bg-[#FFF5F2]'
+                  : 'border-[#E7E8F0] bg-white hover:border-[#FF6B00]/50'
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#F4511E] flex items-center justify-center">
-                  <Building2 className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#FF6B00] flex items-center justify-center p-2">
+                  <img
+                    src="/crab-logo.png"
+                    alt="Brand"
+                    className="w-full h-full object-contain"
+                  />
                 </div>
                 {selectedRole === 'BRAND' && (
-                  <CheckCircle2 className="w-5 h-5 text-[#F4511E]" />
+                  <CheckCircle2 className="w-5 h-5 text-[#FF6B00]" />
                 )}
               </div>
               <div>

@@ -119,12 +119,14 @@ export default function RootLandingPage() {
             </a>
           </nav>
 
-          {/* Center Brand Identity (Classic YC-inspired Editorial Monogram) */}
+          {/* Center Brand Identity */}
           <div className="flex items-center justify-start md:justify-center">
             <Link href="/" className="inline-flex items-center gap-2.5 group">
-              <div className="w-8 h-8 rounded-lg bg-[#ff6600] flex items-center justify-center text-white font-serif font-bold text-lg shadow-sm group-hover:scale-105 transition-transform">
-                C
-              </div>
+              <img
+                src="/crab-logo.png"
+                alt="CRAB"
+                className="w-8 h-8 sm:w-9 sm:h-9 object-contain group-hover:scale-105 transition-transform"
+              />
               <span className="font-serif font-bold text-xl sm:text-2xl tracking-tight text-[#181816]">
                 CRAB
               </span>
@@ -415,9 +417,16 @@ export default function RootLandingPage() {
             {/* For Creators */}
             <div className="bg-white p-8 sm:p-10 rounded-2xl border border-[#181816]/10 shadow-xs flex flex-col justify-between">
               <div>
-                <span className="inline-block px-3 py-1 rounded-full bg-[#ff6600]/10 text-[#ff6600] font-mono text-xs font-semibold uppercase tracking-wider mb-4">
-                  For Creators
-                </span>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="inline-block px-3 py-1 rounded-full bg-[#ff6600]/10 text-[#ff6600] font-mono text-xs font-semibold uppercase tracking-wider">
+                    For Creators
+                  </span>
+                  <img
+                    src="/crab-logo.png"
+                    alt="CRAB"
+                    className="w-7 h-7 object-contain opacity-90"
+                  />
+                </div>
                 <h3 className="font-serif text-2xl sm:text-3xl text-[#181816] mb-4">
                   Sponsorships you can be <em className="italic">proud to recommend</em>
                 </h3>
@@ -461,9 +470,16 @@ export default function RootLandingPage() {
             {/* For Brands */}
             <div className="bg-white p-8 sm:p-10 rounded-2xl border border-[#181816]/10 shadow-xs flex flex-col justify-between">
               <div>
-                <span className="inline-block px-3 py-1 rounded-full bg-[#edebe4] text-[#4a4944] font-mono text-xs font-semibold uppercase tracking-wider mb-4">
-                  For Brands
-                </span>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="inline-block px-3 py-1 rounded-full bg-[#edebe4] text-[#4a4944] font-mono text-xs font-semibold uppercase tracking-wider">
+                    For Brands
+                  </span>
+                  <img
+                    src="/crab-logo.png"
+                    alt="CRAB"
+                    className="w-7 h-7 object-contain opacity-90"
+                  />
+                </div>
                 <h3 className="font-serif text-2xl sm:text-3xl text-[#181816] mb-4">
                   Reach loyal audiences through <em className="italic">authentic advocates</em>
                 </h3>
@@ -632,10 +648,12 @@ export default function RootLandingPage() {
 
           {/* Brand Info */}
           <div className="space-y-4 md:col-span-1">
-            <Link href="/" className="inline-flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-[#ff6600] flex items-center justify-center text-white font-serif font-bold text-base">
-                C
-              </div>
+            <Link href="/" className="inline-flex items-center gap-2.5 group">
+              <img
+                src="/crab-logo.png"
+                alt="CRAB"
+                className="w-8 h-8 object-contain group-hover:scale-105 transition-transform"
+              />
               <span className="font-serif font-bold text-xl text-white">CRAB</span>
             </Link>
             <p className="text-xs text-white/60 leading-relaxed">

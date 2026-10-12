@@ -37,13 +37,11 @@ export default function CreatorSettingsPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* 1. Page Header */}
         <PortalPageHeader
-          eyebrow="Preferences"
           titlePrefix="Account & application"
           highlightText="settings."
-          description="Manage your account profile, notification subscriptions, session security, and preferences."
         />
 
         {/* Save Toast Feedback */}

@@ -16,6 +16,10 @@ import {
   DollarSign,
   FileText,
   Clock,
+  ChevronLeft,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   Loader2,
   Sparkles,
 } from 'lucide-react';
@@ -135,6 +139,7 @@ function CreatorInboxContent() {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -319,44 +324,69 @@ function CreatorInboxContent() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* 1. Page Header */}
         <PortalPageHeader
-          eyebrow="Direct Messages"
           titlePrefix="Brand"
           highlightText="conversations & offers."
-          description="Coordinate deliverables, negotiate sponsorship agreements, and chat with partner brands in real-time."
         />
 
         {/* 2. Main Two-Pane Chat Container */}
-        <div className="bg-white rounded-2xl border border-[#E7E1DA] shadow-xs overflow-hidden h-[720px] flex">
-          {/* Left Column: Conversation List */}
+        <div className="bg-white rounded-2xl border border-[#E7E1DA] shadow-xs overflow-hidden h-[720px] flex relative">
+          {/* Left Column: Conversation List (Collapsible / Sliding to Icon-Only) */}
           <aside
-            className={`w-full md:w-[360px] border-r border-[#E7E1DA] flex flex-col shrink-0 bg-white ${
-              mobileChatOpen ? 'hidden md:flex' : 'flex'
-            }`}
+            className={`transition-all duration-300 ease-in-out border-r border-[#E7E1DA] flex flex-col shrink-0 bg-white relative ${
+              sidebarCollapsed
+                ? 'w-full md:w-[72px]'
+                : 'w-full md:w-[360px]'
+            } ${mobileChatOpen ? 'hidden md:flex' : 'flex'}`}
           >
-            {/* Search Header */}
-            <div className="p-4 border-b border-[#E7E1DA] space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm text-[#171717]">Conversations</h3>
-                <span className="text-[11px] font-semibold text-[#FF6B00] bg-[#FFF4EB] px-2 py-0.5 rounded-full">
-                  {conversations.length} Active
-                </span>
-              </div>
+            {/* Vertically Centered Seam Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="hidden md:flex absolute -right-3.5 top-1/2 -translate-y-1/2 z-30 w-7 h-7 rounded-full bg-white border border-[#E7E1DA] hover:border-[#FF6B00] text-[#737373] hover:text-[#FF6B00] shadow-md items-center justify-center transition-all hover:scale-110 cursor-pointer"
+              title={sidebarCollapsed ? "Expand conversations panel" : "Collapse conversations panel"}
+              aria-label={sidebarCollapsed ? "Expand conversations panel" : "Collapse conversations panel"}
+            >
+              {sidebarCollapsed ? (
+                <ChevronRight className="w-4 h-4 ml-0.5" />
+              ) : (
+                <ChevronLeft className="w-4 h-4 mr-0.5" />
+              )}
+            </button>
 
-              <div className="relative">
-                <Search className="w-4 h-4 text-[#737373] absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search messages..."
-                  className="w-full pl-9 pr-3 py-2 bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] rounded-xl text-xs text-[#171717] placeholder:text-[#737373] focus:outline-none transition"
-                />
-              </div>
+            {/* Header Area */}
+            <div className="border-b border-[#E7E1DA] overflow-hidden">
+              {!sidebarCollapsed ? (
+                <div className="p-4 space-y-3 min-w-[320px]">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-sm text-[#171717]">Conversations</h3>
+                    <span className="text-[11px] font-semibold text-[#FF6B00] bg-[#FFF4EB] px-2 py-0.5 rounded-full">
+                      {conversations.length} Active
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-[#737373] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search messages..."
+                      className="w-full pl-9 pr-3 py-2 bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] rounded-xl text-xs text-[#171717] placeholder:text-[#737373] focus:outline-none transition"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="h-16 flex items-center justify-center" title="Conversations">
+                  <div className="w-8 h-8 rounded-xl bg-[#FFF4EB] text-[#FF6B00] flex items-center justify-center shadow-2xs">
+                    <MessageSquare className="w-4 h-4" />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Conversation Items List */}
-            <div className="flex-1 overflow-y-auto divide-y divide-[#E7E1DA]/60">
+            <div className="flex-1 overflow-y-auto divide-y divide-[#E7E1DA]/60 overflow-x-hidden">
               {conversations.map((conv) => {
                 const isSelected = activeConv.id === conv.id;
                 return (
@@ -366,38 +396,51 @@ function CreatorInboxContent() {
                       setActiveConv(conv);
                       setMobileChatOpen(true);
                     }}
-                    className={`p-4 cursor-pointer transition-colors flex items-start gap-3 relative ${
+                    title={sidebarCollapsed ? `${conv.brand.name} • ${conv.campaign.name}` : undefined}
+                    className={`cursor-pointer transition-colors relative ${
+                      sidebarCollapsed
+                        ? 'p-3 flex items-center justify-center'
+                        : 'p-4 flex items-start gap-3'
+                    } ${
                       isSelected ? 'bg-[#FFF4EB]' : 'hover:bg-[#F8F6F2]'
                     }`}
                   >
+                    {/* Active Left Indicator Bar */}
                     {isSelected && (
                       <span className="absolute left-0 top-2 bottom-2 w-1 bg-[#FF6B00] rounded-r-md" />
                     )}
 
-                    <div className="w-10 h-10 rounded-xl bg-[#171717] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                    {/* Brand Avatar Icon */}
+                    <div className="relative w-10 h-10 rounded-xl bg-[#171717] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
                       {conv.brand.avatar}
+                      {sidebarCollapsed && conv.unread > 0 && (
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#FF6B00] ring-2 ring-white" />
+                      )}
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="font-bold text-xs text-[#171717] truncate">
-                          {conv.brand.name}
-                        </span>
-                        <span className="text-[10px] text-[#737373] shrink-0">
-                          {conv.time}
-                        </span>
+                    {/* Text Details (Only when expanded) */}
+                    {!sidebarCollapsed && (
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-xs text-[#171717] truncate">
+                            {conv.brand.name}
+                          </span>
+                          <span className="text-[10px] text-[#737373] shrink-0">
+                            {conv.time}
+                          </span>
+                        </div>
+
+                        <div className="text-[11px] font-semibold text-[#FF6B00] truncate mt-0.5">
+                          {conv.campaign.name}
+                        </div>
+
+                        <p className="text-xs text-[#737373] truncate mt-1">
+                          {conv.lastMessage}
+                        </p>
                       </div>
+                    )}
 
-                      <div className="text-[11px] font-semibold text-[#FF6B00] truncate mt-0.5">
-                        {conv.campaign.name}
-                      </div>
-
-                      <p className="text-xs text-[#737373] truncate mt-1">
-                        {conv.lastMessage}
-                      </p>
-                    </div>
-
-                    {conv.unread > 0 && (
+                    {!sidebarCollapsed && conv.unread > 0 && (
                       <span className="w-4 h-4 rounded-full bg-[#FF6B00] text-white text-[9px] font-bold flex items-center justify-center shrink-0 self-center">
                         {conv.unread}
                       </span>
@@ -408,15 +451,16 @@ function CreatorInboxContent() {
             </div>
           </aside>
 
-          {/* Right Column: Chat View */}
+          {/* Right Column: Chat View (Responsive Full-Width when Collapsed) */}
           <section
-            className={`flex-1 flex flex-col h-full bg-[#FAF9F6] ${
+            className={`flex-1 flex flex-col h-full bg-[#FAF9F6] transition-all duration-300 ease-in-out ${
               mobileChatOpen ? 'flex' : 'hidden md:flex'
             }`}
           >
             {/* Chat Top Header */}
             <div className="h-16 px-6 border-b border-[#E7E1DA] bg-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
+                {/* Mobile Back Button */}
                 <button
                   type="button"
                   onClick={() => setMobileChatOpen(false)}
