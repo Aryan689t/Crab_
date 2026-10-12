@@ -6,18 +6,11 @@ import { fetchApi, invalidateApiCache } from '../../../lib/api';
 import { useMockStore } from '../../../mock/store';
 import Link from 'next/link';
 import {
-  FileText,
-  CheckCircle2,
   Users,
-  Sparkles,
-  ArrowRight,
-  Send,
-  Building2,
   Search,
   MessageSquare,
   ChevronRight,
   Clock,
-  DollarSign,
   Check,
   X,
   Loader2,
@@ -120,19 +113,16 @@ export default function BrandApplicationsPage() {
   });
 
   const submittedCount = applications.filter((a) => a.status === 'SUBMITTED').length;
-  const inDiscussionCount = applications.filter((a) => a.status === 'OFFER_RECEIVED' || a.status === 'UNDER_REVIEW').length;
   const acceptedCount = applications.filter((a) => a.status === 'ACCEPTED').length;
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
         {/* 1. Unified Page Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <PortalPageHeader
-            eyebrow="Proposal Inbound"
             titlePrefix="Review creator"
             highlightText="applications & proposals."
-            description="Evaluate creator pitches, review explainable AI fit scores, negotiate deliverables, and approve partnerships."
           />
 
           <Link
@@ -144,46 +134,7 @@ export default function BrandApplicationsPage() {
           </Link>
         </div>
 
-        {/* 2. Application Pipeline Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
-            <div className="flex items-center justify-between text-[#737373]">
-              <span className="text-xs font-semibold uppercase tracking-wider">Total Received</span>
-              <FileText className="w-4 h-4 text-[#FF6B00]" />
-            </div>
-            <div className="text-2xl font-bold text-[#171717]">{applications.length}</div>
-            <p className="text-[11px] text-[#737373]">Across all campaigns</p>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
-            <div className="flex items-center justify-between text-[#737373]">
-              <span className="text-xs font-semibold uppercase tracking-wider">Awaiting Review</span>
-              <Clock className="w-4 h-4 text-amber-600" />
-            </div>
-            <div className="text-2xl font-bold text-amber-600">{submittedCount}</div>
-            <p className="text-[11px] text-amber-700 font-medium">Action required</p>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
-            <div className="flex items-center justify-between text-[#737373]">
-              <span className="text-xs font-semibold uppercase tracking-wider">Negotiations</span>
-              <MessageSquare className="w-4 h-4 text-blue-600" />
-            </div>
-            <div className="text-2xl font-bold text-[#171717]">{inDiscussionCount}</div>
-            <p className="text-[11px] text-[#737373]">Offers under discussion</p>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-[#E7E1DA] shadow-xs space-y-2">
-            <div className="flex items-center justify-between text-[#737373]">
-              <span className="text-xs font-semibold uppercase tracking-wider">Accepted Deals</span>
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            </div>
-            <div className="text-2xl font-bold text-emerald-700">{acceptedCount}</div>
-            <p className="text-[11px] text-emerald-700 font-medium">Ready for production</p>
-          </div>
-        </div>
-
-        {/* 3. Toolbar & Status Filter */}
+        {/* 2. Toolbar & Status Filter */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E7E1DA] shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           {/* Search Input */}
           <div className="relative flex-1">
