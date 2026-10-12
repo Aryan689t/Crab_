@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import CreatorCarousel from '@/components/CreatorCarousel';
-import GalleryHeading from '@/components/GalleryHeading';
 
 const FAQ_ITEMS = [
   {
@@ -213,32 +212,21 @@ export default function RootLandingPage() {
             <span>CREATORS ✕ BRANDS • DIRECT ALIGNMENT PLATFORM</span>
           </div>
 
-          {/* 3D Gallery Heading Showcase - Seamless Warm #F9F7F3 Light Frame */}
-          <section className="w-full max-w-[1140px] mx-auto my-6 rounded-3xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-[#F9F7F3] border border-[#181816]/08 transition-shadow hover:shadow-[0_12px_40px_rgb(0,0,0,0.06)]">
-            <div className="w-full h-[460px] sm:h-[560px] md:h-[640px] bg-[#F9F7F3]">
-              <GalleryHeading
-                variant="rising-diagonal"
-                mode="light"
-                font="sans"
-                weight="700"
-                headlineLine1="YOUR CREATIVITY DESERVES"
-                headlineLine2="THE RIGHT CONNECTIONS."
-                headlineSize={1.15}
-                hue={0}
-                saturation={1.00}
-                brightness={1.00}
-              />
-            </div>
-          </section>
+          {/* Hero Display Headline */}
+          <h1 className="font-serif text-4xl sm:text-6xl md:text-7xl lg:text-[84px] font-bold text-[#181816] uppercase tracking-[-0.02em] leading-[1.02] max-w-[1040px] mx-auto my-6 sm:my-8">
+            <span className="block">YOUR CREATIVITY</span>
+            <span className="block">
+              DESERVES <em className="italic text-[#ff6600] font-bold">THE RIGHT</em>
+            </span>
+            <span className="block">CONNECTIONS.</span>
+          </h1>
 
-          <h1 className="sr-only">Your Creativity Deserves the Right Connections.</h1>
-
-          {/* Supporting Statement / Quote (Quiet, Editorial Typography) */}
-          <div className="max-w-[620px] mx-auto text-xs sm:text-sm font-serif italic text-[#76746e] leading-relaxed mb-6">
+          {/* Subtext / Principle Quote (Centered directly beneath headline) */}
+          <div className="max-w-[640px] mx-auto text-xs sm:text-sm font-serif italic text-[#76746e] leading-relaxed mb-6 sm:mb-8">
             <p>
               [1] “True alignment isn't vanity reach—it's shared identity, genuine audience affinity, and collaboration that feels completely natural to both sides.”
             </p>
-            <span className="block mt-1.5 font-mono text-[11px] not-italic text-[#ff6600] font-medium tracking-wide">
+            <span className="block mt-2 font-mono text-[11px] sm:text-xs not-italic text-[#ff6600] font-medium tracking-wide">
               — CRAB Founding Principle
             </span>
           </div>
