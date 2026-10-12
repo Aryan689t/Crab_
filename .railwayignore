@@ -1,0 +1,8 @@
+# Ignore design mockups, diagrams, and documentation from Railway deployment snapshot
+design/
+docs/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.ps1
