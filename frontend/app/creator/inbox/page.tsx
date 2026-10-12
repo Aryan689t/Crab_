@@ -1,6 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useAuth } from '../../../lib/auth-context';
+import { fetchApi } from '../../../lib/api';
 import {
   MessageSquare,
   Search,
@@ -17,6 +20,8 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 
@@ -34,6 +39,7 @@ interface Conversation {
   time: string;
   unread: number;
   status: string;
+  messages?: any[];
 }
 
 interface Message {
@@ -121,7 +127,12 @@ const INITIAL_MESSAGES: Message[] = [
   },
 ];
 
-export default function CreatorInboxPage() {
+function CreatorInboxContent() {
+  const searchParams = useSearchParams();
+  const targetConvId = searchParams.get('conversationId') || searchParams.get('id');
+  const { user, token } = useAuth();
+
+  const [dbConversations, setDbConversations] = useState<any[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
   const [activeConv, setActiveConv] = useState<Conversation>(MOCK_CONVERSATIONS[0]);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
@@ -129,36 +140,168 @@ export default function CreatorInboxPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [sending, setSending] = useState(false);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  // 1. Fetch conversations list from backend
+  const loadConversations = async () => {
+    if (!token) return;
+    try {
+      const res = await fetchApi<{ data: any[] }>('/api/conversations', {}, token);
+      if (res?.data && Array.isArray(res.data)) {
+        setDbConversations(res.data);
+      }
+    } catch (err) {
+      console.warn('[CREATOR_INBOX] Backend conversation fetch fallback:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadConversations();
+  }, [token]);
+
+  // Combine live PostgreSQL conversations with mock conversations
+  useEffect(() => {
+    if (dbConversations.length > 0) {
+      const mappedDb: Conversation[] = dbConversations.map((c: any) => {
+        const brandName = c.brand?.name || 'Partner Brand';
+        const brandAvatar = brandName.slice(0, 2).toUpperCase();
+        const lastMsg = c.messages?.[c.messages.length - 1];
+
+        return {
+          id: c.id,
+          brand: {
+            name: brandName,
+            avatar: brandAvatar,
+          },
+          campaign: {
+            name: c.campaign?.title || 'Collaboration Sprint',
+            id: c.campaign?.id || '',
+          },
+          lastMessage: lastMsg?.messageText || 'Started conversation',
+          time: lastMsg?.createdAt
+            ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'Active',
+          unread: 0,
+          status: 'ACTIVE',
+          messages: c.messages || [],
+        };
+      });
+
+      const dbIds = new Set(mappedDb.map((d) => d.id));
+      const extraMocks = MOCK_CONVERSATIONS.filter((m) => !dbIds.has(m.id));
+      const combined = [...mappedDb, ...extraMocks];
+      setConversations(combined);
+
+      // Automatically select conversation passed via URL param
+      if (targetConvId) {
+        const found = combined.find((c) => c.id === targetConvId);
+        if (found) {
+          setActiveConv(found);
+          setMobileChatOpen(true);
+        } else if (combined.length > 0) {
+          setActiveConv(combined[0]);
+        }
+      } else if (combined.length > 0 && (!activeConv || !combined.some((c) => c.id === activeConv.id))) {
+        setActiveConv(combined[0]);
+      }
+    }
+  }, [dbConversations, targetConvId]);
+
+  // 2. Load messages for active conversation
+  const loadActiveMessages = async () => {
+    if (!token || !activeConv) return;
+    // If it's a PostgreSQL conversation ID
+    if (activeConv.id.includes('-')) {
+      try {
+        const res = await fetchApi<{ data: any }>(`/api/conversations/${activeConv.id}`, {}, token);
+        if (res?.data?.messages) {
+          const mapped: Message[] = res.data.messages.map((m: any) => ({
+            id: m.id,
+            senderId: m.senderUserId === user?.id ? 'creator' : 'brand',
+            text: m.messageText,
+            time: m.createdAt
+              ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'Just now',
+            type: 'TEXT',
+          }));
+          setMessages(mapped);
+        }
+      } catch (err) {
+        console.warn('[CREATOR_INBOX] Failed to poll messages:', err);
+      }
+    } else {
+      // Mock conversation fallback
+      setMessages(INITIAL_MESSAGES);
+    }
+  };
+
+  useEffect(() => {
+    loadActiveMessages();
+  }, [activeConv?.id, token]);
+
+  // 3. Periodic polling (every 3.5 seconds) for live thread updates
+  useEffect(() => {
+    if (!token || !activeConv || !activeConv.id.includes('-')) return;
+    const interval = setInterval(() => {
+      loadActiveMessages();
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [activeConv?.id, token]);
+
+  // 4. Send Message Handler
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
+    const textToSend = inputText.trim();
+    if (!textToSend || sending) return;
 
-    const newMsg: Message = {
+    setInputText('');
+
+    const optimisticMsg: Message = {
       id: `msg_${Date.now()}`,
       senderId: 'creator',
-      text: inputText,
+      text: textToSend,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       type: 'TEXT',
     };
 
-    setMessages((prev) => [...prev, newMsg]);
-    setInputText('');
+    setMessages((prev) => [...prev, optimisticMsg]);
 
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `msg_${Date.now()}`,
-          senderId: 'brand',
-          text: 'Thanks for the update Alex. The marketing lead will review this by tomorrow morning!',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          type: 'TEXT',
-        },
-      ]);
-    }, 1800);
+    // Send to live API if valid database conversation
+    if (token && activeConv.id.includes('-')) {
+      setSending(true);
+      try {
+        await fetchApi(
+          `/api/conversations/${activeConv.id}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ messageText: textToSend }),
+          },
+          token
+        );
+        loadConversations();
+      } catch (err) {
+        console.warn('[CREATOR_INBOX] Backend message persistence fallback:', err);
+      } finally {
+        setSending(false);
+      }
+    } else {
+      // Simulate reply for demo mock threads
+      setIsTyping(true);
+      setTimeout(() => {
+        setIsTyping(false);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg_${Date.now()}`,
+            senderId: 'brand',
+            text: 'Thanks for the update Alex. The marketing lead will review this by tomorrow morning!',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            type: 'TEXT',
+          },
+        ]);
+      }, 1800);
+    }
   };
 
   const acceptOffer = (id: string) => {
@@ -170,6 +313,14 @@ export default function CreatorInboxPage() {
       )
     );
   };
+
+  const filteredConversations = conversations.filter(
+    (c) =>
+      searchFilter.trim() === '' ||
+      c.brand.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      c.campaign.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      c.lastMessage.toLowerCase().includes(searchFilter.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
@@ -472,5 +623,19 @@ export default function CreatorInboxPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function CreatorInboxPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F8F6F2] flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-[#FF6B00]" />
+        </div>
+      }
+    >
+      <CreatorInboxContent />
+    </Suspense>
   );
 }

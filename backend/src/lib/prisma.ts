@@ -6,7 +6,7 @@ declare global {
   var prismaClientInstance: PrismaClient | undefined;
 }
 
-export const prisma = new Proxy({} as PrismaClient, {
+export const prisma = new Proxy({} as PrismaClient & { application: any; applications: any }, {
   get(target, prop, receiver) {
     if (!config.databaseUrl) {
       throw new Error('DATABASE_UNCONFIGURED');
@@ -14,10 +14,23 @@ export const prisma = new Proxy({} as PrismaClient, {
     
     if (!globalThis.prismaClientInstance) {
       globalThis.prismaClientInstance = new PrismaClient({
+        datasources: {
+          db: {
+            url: config.databaseUrl || config.directUrl,
+          },
+        },
         log: config.isDevelopment ? ['error', 'warn'] : ['error'],
       });
     }
     
-    return Reflect.get(globalThis.prismaClientInstance, prop, receiver);
+    const instance = globalThis.prismaClientInstance as any;
+    if (prop === 'applications') {
+      return instance.application || instance.applications;
+    }
+    if (prop === 'application') {
+      return instance.application || instance.applications;
+    }
+    
+    return Reflect.get(instance, prop, receiver);
   }
 });

@@ -2,6 +2,9 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../../../lib/auth-context';
+import { fetchApi } from '../../../lib/api';
 import {
   Search,
   MessageSquare,
@@ -16,6 +19,8 @@ import {
   Check,
   X,
   IndianRupee,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 import { StarRating } from '../../../components/ui/StarRating';
@@ -108,10 +113,58 @@ const REQUESTS_DATA: RequestItem[] = [
 ];
 
 export default function CreatorRequestsPage() {
+  const router = useRouter();
+  const { user, token } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('All Requests');
   const [selectedReqId, setSelectedReqId] = useState<string>(REQUESTS_DATA[0].id);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [acceptedIds, setAcceptedIds] = useState<string[]>([]);
+
+  const handleAcceptAndOpenThread = async (reqItem: RequestItem) => {
+    if (acceptingId) return;
+    setAcceptingId(reqItem.id);
+    setErrorMessage(null);
+
+    try {
+      if (!token) {
+        throw new Error('Please sign in to accept invitations.');
+      }
+
+      const res = await fetchApi<{
+        data: {
+          conversationId: string;
+          status: string;
+        };
+      }>(
+        `/api/requests/${reqItem.id}/accept`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            snippet: reqItem.snippet,
+            budget: reqItem.budget,
+            deliverables: reqItem.deliverables,
+          }),
+        },
+        token
+      );
+
+      setAcceptedIds((prev) => [...prev, reqItem.id]);
+      const convId = res?.data?.conversationId;
+      if (convId) {
+        router.push(`/creator/inbox?conversationId=${convId}`);
+      } else {
+        router.push('/creator/inbox');
+      }
+    } catch (err: any) {
+      console.error('[REQUESTS] Failed to accept invitation:', err);
+      setErrorMessage(err.message || 'Failed to accept invitation. Please try again.');
+    } finally {
+      setAcceptingId(null);
+    }
+  };
 
   const TABS = [
     { label: 'All Requests', count: REQUESTS_DATA.length },
@@ -134,11 +187,11 @@ export default function CreatorRequestsPage() {
 
   const handleAction = (type: 'accept' | 'decline') => {
     if (type === 'accept') {
-      setActionFeedback(`Accepted invitation from ${selectedReq.brand}. Conversation opened.`);
+      handleAcceptAndOpenThread(selectedReq);
     } else {
       setActionFeedback(`Declined invitation from ${selectedReq.brand}.`);
+      setTimeout(() => setActionFeedback(null), 3500);
     }
-    setTimeout(() => setActionFeedback(null), 3500);
   };
 
   return (
@@ -330,15 +383,37 @@ export default function CreatorRequestsPage() {
               </div>
             </div>
 
+            {errorMessage && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="pt-4 border-t border-[#E7E1DA] flex flex-col sm:flex-row items-center gap-3">
               <button
                 type="button"
-                onClick={() => handleAction('accept')}
-                className="w-full sm:w-auto flex-1 py-2.5 px-4 rounded-xl bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                disabled={acceptingId === selectedReq.id || acceptedIds.includes(selectedReq.id)}
+                onClick={() => handleAcceptAndOpenThread(selectedReq)}
+                className="w-full sm:w-auto flex-1 py-2.5 px-4 rounded-xl bg-[#FF6B00] hover:bg-[#e05e00] disabled:opacity-50 text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Check className="w-4 h-4" />
-                <span>Accept & Open Thread</span>
+                {acceptingId === selectedReq.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Accepting & Opening Thread...</span>
+                  </>
+                ) : acceptedIds.includes(selectedReq.id) ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Accepted (Opening Inbox...)</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Accept & Open Thread</span>
+                  </>
+                )}
               </button>
 
               <Link

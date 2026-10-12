@@ -41,6 +41,14 @@ enum MatchStatus {
   DECLINED
 }
 
+enum ApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
 enum CollaborationStatus {
   PROPOSED
   NEGOTIATING
@@ -101,6 +109,7 @@ model Creator {
   contents           Content[]
   aiProfile          CreatorAIProfile?
   matches            Match[]
+  applications       Application[]
   collaborations     Collaboration[]
   conversations      Conversation[]
 
@@ -260,6 +269,7 @@ model Campaign {
   brand             Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
   aiProfile         CampaignAIProfile?
   matches           Match[]
+  applications      Application[]
   collaborations    Collaboration[]
   conversations     Conversation[]
 
@@ -415,3 +425,24 @@ model Payment {
 
   @@map("payments")
 }
+
+model Application {
+  id             String            @id @default(uuid())
+  campaignId     String            @map("campaign_id")
+  creatorId      String            @map("creator_id")
+  pitch          String?
+  proposedRate   Decimal?          @map("proposed_rate") @db.Decimal(12, 2)
+  status         ApplicationStatus @default(SUBMITTED)
+  brandNote      String?           @map("brand_note")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  campaign       Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creator        Creator           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, campaignId])
+  @@index([campaignId, status])
+  @@index([creatorId, status])
+  @@map("applications")
+}
+

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Search,
@@ -18,6 +18,9 @@ import {
   Filter,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+
+import { useAuth } from '../../../lib/auth-context';
+import { fetchApi } from '../../../lib/api';
 
 interface ApplicationItem {
   id: string;
@@ -108,19 +111,94 @@ const APPLICATIONS_DATA: ApplicationItem[] = [
 ];
 
 export default function CreatorApplicationsPage() {
+  const { user, token } = useAuth();
+  const [dbApps, setDbApps] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('All');
   const [selectedAppId, setSelectedAppId] = useState<string>(APPLICATIONS_DATA[0].id);
   const [searchQuery, setSearchQuery] = useState('');
 
+  useEffect(() => {
+    async function loadApplications() {
+      if (!token) return;
+      setLoading(true);
+      try {
+        const res = await fetchApi<{ data: any[] }>('/api/creators/me/applications', {}, token);
+        if (res?.data) {
+          setDbApps(res.data);
+          if (res.data.length > 0) {
+            setSelectedAppId(res.data[0].id);
+          }
+        }
+      } catch (err) {
+        console.warn('[CREATOR_APPLICATIONS] Could not load live applications:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadApplications();
+  }, [token]);
+
+  // Combined list prioritizing live applications
+  const allApplications = React.useMemo(() => {
+    if (dbApps.length > 0) {
+      const colors = [
+        { bg: '#232F3E', text: '#FF9900' },
+        { bg: '#000000', text: '#FFFFFF' },
+        { bg: '#FF6B00', text: '#FFFFFF' },
+        { bg: '#00B8FC', text: '#FFFFFF' },
+      ];
+      const mapped = dbApps.map((a: any, idx: number) => {
+        const brandName = a.campaign?.brand?.name || 'Partner Brand';
+        const color = colors[idx % colors.length];
+        const statusMap: Record<string, ApplicationItem['status']> = {
+          ACCEPTED: 'Accepted',
+          OFFER_RECEIVED: 'Offer Received',
+          IN_DISCUSSION: 'In Discussion',
+          DECLINED: 'Rejected',
+          REJECTED: 'Rejected',
+          SUBMITTED: 'Under Review',
+        };
+        const statusStr = statusMap[a.status] || 'Under Review';
+        const stage =
+          a.status === 'ACCEPTED' ? 4 :
+          a.status === 'OFFER_RECEIVED' ? 4 :
+          a.status === 'IN_DISCUSSION' ? 3 : 2;
+
+        return {
+          id: a.id,
+          brand: brandName,
+          title: a.campaign?.title || 'Brand Campaign',
+          logoBg: color.bg,
+          logoText: color.text,
+          status: statusStr,
+          submittedAt: a.createdAt
+            ? new Date(a.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : 'Recently',
+          payout: `₹${(Number(a.proposedRate) || a.campaign?.budgetMin || 40000).toLocaleString()}`,
+          deliverables: a.campaign?.productOrService || '1 Video Review + Story Integration',
+          message: a.pitch || 'Pitch submitted by creator.',
+          deadline: 'Active Phase',
+          stage,
+        };
+      });
+
+      const dbIds = new Set(mapped.map((m: any) => m.id));
+      const extraMocks = APPLICATIONS_DATA.filter((m) => !dbIds.has(m.id));
+      return [...mapped, ...extraMocks];
+    }
+    return APPLICATIONS_DATA;
+  }, [dbApps]);
+
   const TABS = [
-    { label: 'All', count: APPLICATIONS_DATA.length },
-    { label: 'Under Review', count: APPLICATIONS_DATA.filter((a) => a.status === 'Under Review').length },
-    { label: 'In Discussion', count: APPLICATIONS_DATA.filter((a) => a.status === 'In Discussion').length },
-    { label: 'Offer Received', count: APPLICATIONS_DATA.filter((a) => a.status === 'Offer Received').length },
-    { label: 'Accepted', count: APPLICATIONS_DATA.filter((a) => a.status === 'Accepted').length },
+    { label: 'All', count: allApplications.length },
+    { label: 'Under Review', count: allApplications.filter((a) => a.status === 'Under Review').length },
+    { label: 'In Discussion', count: allApplications.filter((a) => a.status === 'In Discussion').length },
+    { label: 'Offer Received', count: allApplications.filter((a) => a.status === 'Offer Received').length },
+    { label: 'Accepted', count: allApplications.filter((a) => a.status === 'Accepted').length },
   ];
 
-  const filteredApps = APPLICATIONS_DATA.filter((app) => {
+  const filteredApps = allApplications.filter((app) => {
     const matchesTab = activeTab === 'All' || app.status === activeTab;
     const matchesSearch =
       searchQuery.trim() === '' ||
@@ -130,7 +208,7 @@ export default function CreatorApplicationsPage() {
   });
 
   const selectedApp =
-    APPLICATIONS_DATA.find((a) => a.id === selectedAppId) || filteredApps[0] || APPLICATIONS_DATA[0];
+    allApplications.find((a) => a.id === selectedAppId) || filteredApps[0] || allApplications[0] || APPLICATIONS_DATA[0];
 
   const getStatusBadge = (status: ApplicationItem['status']) => {
     switch (status) {
