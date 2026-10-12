@@ -4,6 +4,8 @@ import {
   upsertCreatorProfile,
   getCreatorPublicProfile,
   getCreatorMetrics,
+  getCreatorOpportunities,
+  getCreatorRecentActivity,
   completeCreatorOnboarding,
   listCreators,
 } from '../controllers/creatorController.js';
@@ -31,6 +33,8 @@ creatorRouter.patch('/me', authenticateToken, requireRole('CREATOR'), upsertCrea
 creatorRouter.post('/me/onboarding', authenticateToken, requireRole('CREATOR'), completeCreatorOnboarding);
 creatorRouter.post('/profile', authenticateToken, requireRole('CREATOR'), upsertCreatorProfile);
 creatorRouter.get('/me/metrics', authenticateToken, requireRole('CREATOR'), getCreatorMetrics);
+creatorRouter.get('/me/opportunities', authenticateToken, requireRole('CREATOR'), getCreatorOpportunities);
+creatorRouter.get('/me/activity', authenticateToken, requireRole('CREATOR'), getCreatorRecentActivity);
 creatorRouter.get('/me/applications', authenticateToken, requireRole('CREATOR'), getMyCreatorApplications);
 creatorRouter.get('/me/application', authenticateToken, requireRole('CREATOR'), getMyCreatorApplications);
 creatorRouter.get('/me/collaborations', authenticateToken, requireRole('CREATOR'), getMyCreatorCollaborations);

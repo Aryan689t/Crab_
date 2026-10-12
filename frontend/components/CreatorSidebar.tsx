@@ -45,10 +45,9 @@ export function CreatorSidebar({ isOpen, setIsOpen }: CreatorSidebarProps) {
     ? user.displayName.includes(' ')
       ? user.displayName.toLowerCase().replace(/\s+/g, '.')
       : user.displayName
-    : 'alex.chen';
-
-  const avatarUrl =
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+    : user?.email
+    ? user.email.split('@')[0]
+    : 'creator';
 
   return (
     <Sidebar open={isOpen} setOpen={setIsOpen} animate={false}>
@@ -150,12 +149,8 @@ export function CreatorSidebar({ isOpen, setIsOpen }: CreatorSidebarProps) {
             {isProfileActive && (
               <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-md bg-[#FF6B00]" />
             )}
-            <div className="relative w-8 h-8 rounded-full overflow-hidden bg-[#F4EFEA] border border-[#E7E1DA] shrink-0">
-              <img
-                src={avatarUrl}
-                alt={accountUsername}
-                className="w-full h-full object-cover"
-              />
+            <div className="relative w-8 h-8 rounded-full overflow-hidden bg-[#FF6B00]/10 border border-[#E7E1DA] shrink-0 flex items-center justify-center font-bold text-xs text-[#FF6B00]">
+              {(accountUsername || 'CR').slice(0, 2).toUpperCase()}
             </div>
             <div className="flex flex-col min-w-0 text-left">
               <span

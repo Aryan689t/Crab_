@@ -2,58 +2,49 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Clock, Megaphone, ChevronRight } from 'lucide-react';
-import { NotionLogo, AwsLogo } from './BrandIcons';
+import { Clock, Megaphone, ChevronRight, FileText, Handshake, Link as LinkIcon } from 'lucide-react';
 
 export interface ActivityItem {
   id: string;
   title: string;
   time: string;
-  iconType: 'notion' | 'campaign' | 'aws';
+  iconType?: string;
   href?: string;
 }
 
-const DEFAULT_ACTIVITIES: ActivityItem[] = [
-  {
-    id: 'act-1',
-    title: 'Application viewed by Notion',
-    time: '2 hours ago',
-    iconType: 'notion',
-    href: '/creator/applications',
-  },
-  {
-    id: 'act-2',
-    title: 'New campaign matches available',
-    time: '5 hours ago',
-    iconType: 'campaign',
-    href: '/creator/opportunities',
-  },
-  {
-    id: 'act-3',
-    title: 'AWS Developer Campaign added to your matches',
-    time: '1 day ago',
-    iconType: 'aws',
-    href: '/creator/opportunities',
-  },
-];
-
 export function RecentActivityList({
-  activities = DEFAULT_ACTIVITIES,
+  activities = [],
+  isLoading = false,
 }: {
   activities?: ActivityItem[];
+  isLoading?: boolean;
 }) {
-  const renderIcon = (type: ActivityItem['iconType']) => {
+  const renderIcon = (type?: string) => {
     switch (type) {
-      case 'notion':
-        return <NotionLogo className="w-8 h-8 rounded-lg shrink-0" />;
-      case 'campaign':
+      case 'application':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-200/60 flex items-center justify-center shrink-0">
+            <FileText className="w-4 h-4" />
+          </div>
+        );
+      case 'collaboration':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center shrink-0">
+            <Handshake className="w-4 h-4" />
+          </div>
+        );
+      case 'social':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 border border-purple-200/60 flex items-center justify-center shrink-0">
+            <LinkIcon className="w-4 h-4" />
+          </div>
+        );
+      default:
         return (
           <div className="w-8 h-8 rounded-lg bg-[#FFF2E8] text-[#FF6B00] border border-[#FFE2D1] flex items-center justify-center shrink-0">
             <Megaphone className="w-4 h-4" />
           </div>
         );
-      case 'aws':
-        return <AwsLogo className="w-8 h-8 rounded-lg shrink-0" />;
     }
   };
 
@@ -79,29 +70,44 @@ export function RecentActivityList({
           </Link>
         </div>
 
-        {/* Activity Feed Items */}
-        <div className="space-y-2.5 mt-1">
-          {activities.map((item) => (
-            <Link
-              key={item.id}
-              href={item.href || '/creator/dashboard'}
-              className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#E7E1DA] hover:border-[#FF6B00]/40 hover:bg-[#FDFBF7] transition group shadow-2xs"
-            >
-              <div className="flex items-center gap-3 min-w-0 pr-2">
-                {renderIcon(item.iconType)}
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-[#171717] group-hover:text-[#FF6B00] transition truncate">
-                    {item.title}
-                  </div>
-                  <div className="text-[11px] text-[#737373]">
-                    {item.time}
+        {/* Activity Feed Items or Empty State */}
+        {isLoading ? (
+          <div className="space-y-2.5 mt-1">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-14 rounded-xl bg-[#F8F6F2] animate-pulse" />
+            ))}
+          </div>
+        ) : !activities || activities.length === 0 ? (
+          <div className="p-4 rounded-xl bg-[#F8F6F2]/60 border border-dashed border-[#E7E1DA] text-center space-y-1 mt-1">
+            <p className="text-xs text-[#737373] leading-relaxed">
+              Your activity will appear here as you connect your accounts, explore campaigns, and interact with brands.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2.5 mt-1">
+            {activities.map((item) => (
+              <Link
+                key={item.id}
+                href={item.href || '/creator/dashboard'}
+                className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#E7E1DA] hover:border-[#FF6B00]/40 hover:bg-[#FDFBF7] transition group shadow-2xs"
+              >
+                <div className="flex items-center gap-3 min-w-0 pr-2">
+                  {renderIcon(item.iconType)}
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-[#171717] group-hover:text-[#FF6B00] transition truncate">
+                      {item.title}
+                    </div>
+                    <div className="text-[11px] text-[#737373]">
+                      {item.time}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-[#A3A3A3] group-hover:text-[#FF6B00] group-hover:translate-x-0.5 transition shrink-0" />
-            </Link>
-          ))}
-        </div>
+
+                <ChevronRight className="w-4 h-4 text-[#A3A3A3] group-hover:text-[#FF6B00] group-hover:translate-x-0.5 transition shrink-0" />
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

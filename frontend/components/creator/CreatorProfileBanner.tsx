@@ -2,39 +2,66 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Sliders, Edit3 } from 'lucide-react';
+import { CheckCircle2, Edit3, Link2 } from 'lucide-react';
 import { YouTubeIcon, InstagramIcon, TikTokIcon, XTwitterIcon } from './BrandIcons';
 import { StarRating } from '../ui/StarRating';
+
+export interface BannerSocialAccount {
+  platform: string;
+  username?: string;
+  profileUrl?: string;
+}
 
 interface CreatorProfileBannerProps {
   displayName?: string;
   avatarUrl?: string;
   bio?: string;
   niches?: string[];
-  totalFollowers?: number | string;
-  engagementRate?: number | string;
+  totalFollowers?: number | null;
+  engagementRate?: number | null;
+  hasMetrics?: boolean;
   isVerified?: boolean;
+  socialAccounts?: BannerSocialAccount[];
 }
 
 export function CreatorProfileBanner({
-  displayName = 'Alex Chen',
-  avatarUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
-  bio = 'Fullstack software engineer breaking down cloud, AI and developer tools.',
-  niches = ['Technology', 'AI & Machine Learning', 'Software Engineering'],
-  totalFollowers = '124.5K',
-  engagementRate = '8.4%',
-  isVerified = true,
+  displayName = 'Creator',
+  avatarUrl,
+  bio,
+  niches = [],
+  totalFollowers,
+  engagementRate,
+  hasMetrics = false,
+  isVerified = false,
+  socialAccounts = [],
 }: CreatorProfileBannerProps) {
   // Format followers display
-  const displayFollowers =
-    typeof totalFollowers === 'number'
+  const displayFollowers = hasMetrics && typeof totalFollowers === 'number'
+    ? totalFollowers >= 1000
       ? `${(totalFollowers / 1000).toFixed(1)}K`
-      : totalFollowers;
+      : `${totalFollowers}`
+    : '—';
 
-  const displayEngagement =
-    typeof engagementRate === 'number'
-      ? `${engagementRate}%`
-      : engagementRate;
+  const displayEngagement = hasMetrics && typeof engagementRate === 'number'
+    ? `${engagementRate.toFixed(1)}%`
+    : '—';
+
+  const renderPlatformIcon = (platform: string) => {
+    const p = platform.toUpperCase();
+    switch (p) {
+      case 'YOUTUBE':
+        return <YouTubeIcon className="w-4 h-4" />;
+      case 'INSTAGRAM':
+        return <InstagramIcon className="w-4 h-4" />;
+      case 'TIKTOK':
+        return <TikTokIcon className="w-4 h-4 text-black" />;
+      case 'X':
+      case 'TWITTER':
+        return <XTwitterIcon className="w-4 h-4 text-black" />;
+      default:
+        return <Link2 className="w-4 h-4 text-[#737373]" />;
+    }
+  };
 
   return (
     <section className="bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -51,7 +78,7 @@ export function CreatorProfileBanner({
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center font-bold text-xl text-[#171717]">
-                {displayName.slice(0, 2).toUpperCase()}
+                {(displayName || 'CR').slice(0, 2).toUpperCase()}
               </div>
             )}
           </div>
@@ -68,7 +95,6 @@ export function CreatorProfileBanner({
             <h2 className="text-xl sm:text-2xl font-bold text-[#171717] tracking-tight">
               {displayName}
             </h2>
-            <StarRating rating={4.9} size="sm" />
             {isVerified && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-2xs">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -78,19 +104,25 @@ export function CreatorProfileBanner({
           </div>
 
           <p className="text-xs sm:text-sm text-[#525252] max-w-2xl leading-relaxed">
-            {bio}
+            {bio || 'No bio provided yet. Update your creator profile to introduce yourself to prospective brands.'}
           </p>
 
           {/* Niche Tags */}
           <div className="flex flex-wrap gap-2 pt-0.5">
-            {niches.map((niche) => (
-              <span
-                key={niche}
-                className="px-3 py-1 rounded-lg bg-[#F8F6F2] text-[#525252] text-xs font-medium border border-[#E7E1DA]"
-              >
-                {niche}
+            {niches.length > 0 ? (
+              niches.map((niche) => (
+                <span
+                  key={niche}
+                  className="px-3 py-1 rounded-lg bg-[#F8F6F2] text-[#525252] text-xs font-medium border border-[#E7E1DA]"
+                >
+                  {niche}
+                </span>
+              ))
+            ) : (
+              <span className="text-[11px] text-[#737373] italic">
+                No niches selected
               </span>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -100,19 +132,35 @@ export function CreatorProfileBanner({
         {/* Social Platforms & Metrics Group */}
         <div className="space-y-3">
           {/* Social Icons Row */}
-          <div className="flex items-center gap-2.5">
-            <span className="p-1 rounded bg-[#F8F6F2] hover:bg-neutral-100 transition border border-[#E7E1DA]/60 cursor-pointer" title="YouTube">
-              <YouTubeIcon className="w-4 h-4" />
-            </span>
-            <span className="p-1 rounded bg-[#F8F6F2] hover:bg-neutral-100 transition border border-[#E7E1DA]/60 cursor-pointer" title="Instagram">
-              <InstagramIcon className="w-4 h-4" />
-            </span>
-            <span className="p-1 rounded bg-[#F8F6F2] hover:bg-neutral-100 transition border border-[#E7E1DA]/60 cursor-pointer" title="TikTok">
-              <TikTokIcon className="w-4 h-4 text-black" />
-            </span>
-            <span className="p-1 rounded bg-[#F8F6F2] hover:bg-neutral-100 transition border border-[#E7E1DA]/60 cursor-pointer" title="X">
-              <XTwitterIcon className="w-4 h-4 text-black" />
-            </span>
+          <div className="flex items-center gap-2">
+            {socialAccounts.length > 0 ? (
+              socialAccounts.map((acc, idx) => (
+                acc.profileUrl ? (
+                  <a
+                    key={`${acc.platform}-${idx}`}
+                    href={acc.profileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-1 rounded bg-[#F8F6F2] hover:bg-neutral-100 transition border border-[#E7E1DA]/60"
+                    title={`${acc.platform}: ${acc.username || ''}`}
+                  >
+                    {renderPlatformIcon(acc.platform)}
+                  </a>
+                ) : (
+                  <span
+                    key={`${acc.platform}-${idx}`}
+                    className="p-1 rounded bg-[#F8F6F2] border border-[#E7E1DA]/60"
+                    title={`${acc.platform}: ${acc.username || ''}`}
+                  >
+                    {renderPlatformIcon(acc.platform)}
+                  </span>
+                )
+              ))
+            ) : (
+              <span className="text-[11px] text-[#737373]">
+                No accounts connected
+              </span>
+            )}
           </div>
 
           {/* Metrics Summary Pill Group */}

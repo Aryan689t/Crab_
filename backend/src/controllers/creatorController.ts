@@ -114,30 +114,36 @@ export async function getCreatorProfile(req: Request, res: Response, next: NextF
     }
 
     if (!creator) {
-      // Mock fallback if creator not yet created or DB unconfigured
-      res.status(200).json({
-        data: {
-          id: `creator_${req.user.id}`,
-          userId: req.user.id,
-          displayName: req.user.email.split('@')[0] || 'Demo Creator',
-          bio: 'Tech, AI, and Software Development content creator.',
-          location: 'Bengaluru, India',
-          contactInformation: { email: req.user.email },
-          profileImageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-          preferences: { primaryNiche: 'Technology' },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          socialAccounts: [
-            { id: 'sa_1', platform: 'YOUTUBE', username: '@democreator', status: 'CONNECTED' },
-          ],
-          aiProfile: {
-            primaryNiches: ['Technology', 'Software Engineering', 'AI Tools'],
-            contentStyle: ['Educational', 'Tutorials', 'Product Reviews'],
-            audienceSummary: 'Tech-savvy developers, engineers, and product builders.',
+      // Ensure User record exists in DB first
+      let user = await prisma.user.findFirst({
+        where: { OR: [{ id: req.user.id }, ...(req.user.email ? [{ email: req.user.email }] : [])] },
+      });
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            id: req.user.id,
+            email: req.user.email || `${req.user.id}@crab.local`,
+            role: 'CREATOR',
           },
+        });
+      }
+
+      // Create a clean, real Creator record for this authenticated user
+      const cleanDisplayName = (req.user as any).displayName || (user.email ? user.email.split('@')[0] : 'Creator');
+      creator = await prisma.creator.create({
+        data: {
+          userId: user.id,
+          displayName: cleanDisplayName,
+          bio: null,
+          location: null,
+          contactInformation: { email: user.email },
+          preferences: {},
+        },
+        include: {
+          socialAccounts: true,
+          aiProfile: true,
         },
       });
-      return;
     }
 
     res.status(200).json({ data: creator });
@@ -196,8 +202,23 @@ export async function upsertCreatorProfile(req: Request, res: Response, next: Ne
           aiProfile: true,
         },
       });
+
+      if (parsed.preferences?.niches && Array.isArray(parsed.preferences.niches)) {
+        await (prisma.creatorAIProfile as any).upsert({
+          where: { creatorId: creator.id },
+          update: { primaryNiches: parsed.preferences.niches },
+          create: {
+            creatorId: creator.id,
+            primaryNiches: parsed.preferences.niches,
+            secondaryNiches: [],
+            contentStyle: ['Technical & Educational'],
+            audienceSummary: 'Tech, AI and Developer Community',
+            brandSuitability: ['B2B SaaS', 'DevTools', 'Cloud Platforms'],
+          },
+        }).catch(() => null);
+      }
     } catch (dbErr) {
-      console.warn('[CREATOR] DB write failed. Returning created profile object.');
+      console.warn('[CREATOR] DB write failed. Returning created profile object.', dbErr);
       creator = {
         id: `creator_${req.user.id}`,
         userId: req.user.id,
@@ -271,15 +292,385 @@ export async function getCreatorPublicProfile(req: Request, res: Response, next:
 
 export async function getCreatorMetrics(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    // Return metrics snapshot
+    if (!req.user) {
+      res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+      return;
+    }
+
+    const creator = await prisma.creator.findFirst({
+      where: {
+        OR: [
+          { userId: req.user.id },
+          ...(req.user.email ? [{ user: { email: req.user.email } }] : []),
+        ],
+      },
+      include: {
+        socialAccounts: {
+          include: {
+            metricSnapshots: {
+              orderBy: { recordedAt: 'desc' },
+              take: 30,
+            },
+          },
+        },
+        metricSnapshots: {
+          orderBy: { recordedAt: 'asc' },
+          take: 60,
+        },
+        contents: {
+          orderBy: { publishedAt: 'desc' },
+          take: 50,
+        },
+      },
+    });
+
+    if (!creator) {
+      res.status(200).json({
+        data: {
+          hasData: false,
+          followers: null,
+          averageViews: null,
+          engagementRate: null,
+          postingFrequency: null,
+          growthData: [],
+          platforms: [],
+          message: 'No creator profile found.',
+        },
+      });
+      return;
+    }
+
+    const accounts = creator.socialAccounts || [];
+    const snapshots = creator.metricSnapshots || [];
+    const contents = creator.contents || [];
+
+    if (accounts.length === 0 && snapshots.length === 0) {
+      res.status(200).json({
+        data: {
+          hasData: false,
+          followers: null,
+          averageViews: null,
+          engagementRate: null,
+          postingFrequency: null,
+          growthData: [],
+          platforms: [],
+          message: 'No social accounts connected yet. Connect your YouTube or Instagram to start tracking metrics.',
+        },
+      });
+      return;
+    }
+
+    const latestSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
+
+    let totalFollowers = 0;
+    let hasMeasuredFollowers = false;
+    const platformsData: Array<{
+      platform: 'YOUTUBE' | 'INSTAGRAM' | 'TIKTOK' | 'X';
+      name: string;
+      handle: string;
+      count: string;
+      growth: string;
+      followers: number | null;
+      isConnected: boolean;
+    }> = [];
+
+    accounts.forEach((acc) => {
+      const latestAccSnapshot = acc.metricSnapshots && acc.metricSnapshots.length > 0 ? acc.metricSnapshots[0] : null;
+      const countNum = latestAccSnapshot?.followers ?? null;
+      if (countNum !== null) {
+        totalFollowers += countNum;
+        hasMeasuredFollowers = true;
+      }
+      platformsData.push({
+        platform: acc.platform as any,
+        name: acc.platform === 'YOUTUBE' ? 'YouTube' : 'Instagram',
+        handle: acc.username.startsWith('@') ? acc.username : `@${acc.username}`,
+        count: countNum !== null ? `${(countNum / 1000).toFixed(1)}K` : 'Pending sync',
+        growth: latestAccSnapshot?.followers ? 'Tracked' : 'Pending sync',
+        followers: countNum,
+        isConnected: acc.status === 'CONNECTED',
+      });
+    });
+
+    // Compute average views
+    let avgViews: number | null = latestSnapshot?.averageViews ?? null;
+    if (avgViews === null && contents.length > 0) {
+      const viewCounts = contents.map((c) => (c.views !== null ? Number(c.views) : null)).filter((v): v is number => v !== null);
+      if (viewCounts.length > 0) {
+        avgViews = Math.round(viewCounts.reduce((a, b) => a + b, 0) / viewCounts.length);
+      }
+    }
+
+    // Compute engagement rate
+    let engagementRate: number | null = latestSnapshot?.engagementRate ?? null;
+    if (engagementRate === null && contents.length > 0) {
+      const rates = contents
+        .map((c) => {
+          const v = c.views !== null ? Number(c.views) : 0;
+          const l = c.likes ?? 0;
+          const com = c.comments ?? 0;
+          return v > 0 ? ((l + com) / v) * 100 : null;
+        })
+        .filter((r): r is number => r !== null);
+      if (rates.length > 0) {
+        engagementRate = Number((rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(1));
+      }
+    }
+
+    // Compute posting cadence
+    let postingFrequency: number | null = latestSnapshot?.postingFrequency ?? null;
+    if (postingFrequency === null && contents.length >= 2) {
+      const dates = contents.map((c) => c.publishedAt).filter((d): d is Date => d !== null);
+      if (dates.length >= 2) {
+        const oldest = dates[dates.length - 1].getTime();
+        const newest = dates[0].getTime();
+        const weeks = Math.max(1, (newest - oldest) / (1000 * 60 * 60 * 24 * 7));
+        postingFrequency = Number((dates.length / weeks).toFixed(1));
+      }
+    }
+
+    // Historical growth chart data from timestamped snapshots
+    const growthData = snapshots.map((s) => ({
+      date: s.recordedAt.toISOString().slice(0, 10),
+      month: s.recordedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      audience: s.followers || 0,
+      label: s.recordedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    }));
+
     res.status(200).json({
       data: {
-        followers: 124500,
-        averageViews: 48200,
-        engagementRate: 5.6,
-        postingFrequency: 3.4,
-        recordedAt: new Date().toISOString(),
-        growthRate: '+12.4% this month',
+        hasData: hasMeasuredFollowers || accounts.length > 0,
+        followers: hasMeasuredFollowers ? totalFollowers : (latestSnapshot?.followers ?? null),
+        averageViews: avgViews,
+        engagementRate: engagementRate,
+        postingFrequency: postingFrequency,
+        recordedAt: latestSnapshot?.recordedAt?.toISOString() || new Date().toISOString(),
+        growthRate: growthData.length >= 2 ? 'Active tracking' : null,
+        growthData,
+        platforms: platformsData,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getCreatorOpportunities(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+      return;
+    }
+
+    const creator = await prisma.creator.findFirst({
+      where: {
+        OR: [
+          { userId: req.user.id },
+          ...(req.user.email ? [{ user: { email: req.user.email } }] : []),
+        ],
+      },
+      include: {
+        aiProfile: true,
+        socialAccounts: true,
+      },
+    });
+
+    if (!creator) {
+      res.status(200).json({
+        data: {
+          opportunities: [],
+          hasData: false,
+          insufficientData: true,
+          message: 'Complete your profile to receive campaign recommendations.',
+        },
+      });
+      return;
+    }
+
+    const creatorPrefs = (creator.preferences as Record<string, any>) || {};
+    const creatorNiches: string[] = [
+      ...(Array.isArray(creatorPrefs.niches) ? creatorPrefs.niches : []),
+      ...(creator.aiProfile?.primaryNiches || []),
+    ].map((n) => n.toLowerCase());
+
+    const connectedPlatforms = creator.socialAccounts.map((a) => a.platform);
+
+    const activeCampaigns = await prisma.campaign.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        brand: {
+          select: { id: true, name: true, category: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+
+    if (activeCampaigns.length === 0) {
+      res.status(200).json({
+        data: {
+          opportunities: [],
+          hasData: false,
+          emptyReason: 'NO_ACTIVE_CAMPAIGNS',
+          message: 'There are currently no active brand campaigns seeking creators in the marketplace.',
+        },
+      });
+      return;
+    }
+
+    const hasProfileNiches = creatorNiches.length > 0;
+    const opportunities = activeCampaigns.map((camp) => {
+      let matchScore = 70;
+      let matchReasons: string[] = [];
+
+      if (camp.platform && connectedPlatforms.includes(camp.platform)) {
+        matchScore += 15;
+        matchReasons.push(`Platform aligned (${camp.platform})`);
+      }
+
+      const campNiche = (camp.creatorNiche || '').toLowerCase();
+      const nicheMatched = creatorNiches.some((n) => campNiche.includes(n) || n.includes(campNiche));
+      if (nicheMatched) {
+        matchScore += 15;
+        matchReasons.push('Content niche alignment');
+      }
+
+      matchScore = Math.min(98, Math.max(65, matchScore));
+
+      const brandLogoType = camp.brand.name.toLowerCase().includes('aws') || camp.brand.name.toLowerCase().includes('amazon')
+        ? 'aws'
+        : camp.brand.name.toLowerCase().includes('notion')
+        ? 'notion'
+        : 'github';
+
+      return {
+        id: camp.id,
+        brand: camp.brand.name,
+        brandId: camp.brand.id,
+        title: camp.title,
+        description: camp.description,
+        category: camp.brand.category || camp.creatorNiche || 'Technology',
+        platforms: camp.platform || 'YOUTUBE',
+        matchScore: hasProfileNiches ? matchScore : null,
+        budgetMin: camp.budgetMin ? Number(camp.budgetMin) : null,
+        budgetMax: camp.budgetMax ? Number(camp.budgetMax) : null,
+        logoType: brandLogoType,
+        matchReasons,
+      };
+    });
+
+    res.status(200).json({
+      data: {
+        opportunities,
+        hasData: true,
+        insufficientData: !hasProfileNiches && connectedPlatforms.length === 0,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+function formatRelativeTime(date: Date): string {
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+export async function getCreatorRecentActivity(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+      return;
+    }
+
+    const creator = await prisma.creator.findFirst({
+      where: {
+        OR: [
+          { userId: req.user.id },
+          ...(req.user.email ? [{ user: { email: req.user.email } }] : []),
+        ],
+      },
+    });
+
+    if (!creator) {
+      res.status(200).json({ data: { activities: [] } });
+      return;
+    }
+
+    const [applications, collaborations, socialAccounts] = await Promise.all([
+      prisma.application.findMany({
+        where: { creatorId: creator.id },
+        include: { campaign: { include: { brand: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+      prisma.collaboration.findMany({
+        where: { creatorId: creator.id },
+        include: { brand: true, campaign: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+      }),
+      prisma.socialAccount.findMany({
+        where: { creatorId: creator.id },
+        orderBy: { connectedAt: 'desc' },
+        take: 3,
+      }),
+    ]);
+
+    const activities: Array<{
+      id: string;
+      title: string;
+      time: string;
+      timestamp: Date;
+      iconType: 'campaign' | 'collaboration' | 'social';
+      href: string;
+    }> = [];
+
+    applications.forEach((app: any) => {
+      activities.push({
+        id: `app_${app.id}`,
+        title: `Application for "${app.campaign?.title || 'Campaign'}" (${app.status?.toLowerCase() || 'submitted'})`,
+        time: formatRelativeTime(new Date(app.createdAt)),
+        timestamp: new Date(app.createdAt),
+        iconType: 'campaign',
+        href: '/creator/applications',
+      });
+    });
+
+    collaborations.forEach((collab: any) => {
+      activities.push({
+        id: `collab_${collab.id}`,
+        title: `Collaboration with ${collab.brand?.name || 'Brand'}: ${collab.status?.toLowerCase() || 'active'}`,
+        time: formatRelativeTime(new Date(collab.updatedAt)),
+        timestamp: new Date(collab.updatedAt),
+        iconType: 'collaboration',
+        href: '/creator/collaborations',
+      });
+    });
+
+    socialAccounts.forEach((acc: any) => {
+      activities.push({
+        id: `social_${acc.id}`,
+        title: `Connected ${acc.platform?.toLowerCase() || 'social'} profile (${acc.username})`,
+        time: formatRelativeTime(new Date(acc.connectedAt)),
+        timestamp: new Date(acc.connectedAt),
+        iconType: 'social',
+        href: '/creator/profile',
+      });
+    });
+
+    activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    res.status(200).json({
+      data: {
+        activities: activities.slice(0, 10),
       },
     });
   } catch (err) {

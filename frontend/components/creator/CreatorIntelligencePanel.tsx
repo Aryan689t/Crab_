@@ -3,17 +3,31 @@
 import React from 'react';
 import Link from 'next/link';
 import { Sparkles, Lightbulb } from 'lucide-react';
-import { RecommendedOpportunityList } from './RecommendedOpportunityList';
+import { RecommendedOpportunityList, OpportunityItem } from './RecommendedOpportunityList';
 
 interface CreatorIntelligencePanelProps {
   insightTitle?: string;
   insightBody?: string;
+  hasIntelligence?: boolean;
+  opportunities?: OpportunityItem[];
+  isLoading?: boolean;
 }
 
 export function CreatorIntelligencePanel({
-  insightTitle = 'Your AI & developer content is gaining traction',
-  insightBody = 'Brands in developer tools, cloud and AI are actively looking for creators like you.',
+  insightTitle,
+  insightBody,
+  hasIntelligence = false,
+  opportunities = [],
+  isLoading = false,
 }: CreatorIntelligencePanelProps) {
+  const displayTitle = insightTitle || (hasIntelligence 
+    ? 'Creator positioning ready' 
+    : 'Insufficient content history for intelligence');
+
+  const displayBody = insightBody || (hasIntelligence
+    ? 'Review your brand readiness and profile strengths.'
+    : 'Connect your active social channels so Gemini AI can evaluate your content themes, audience engagement patterns, and brand alignment.');
+
   return (
     <section className="bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs space-y-5 flex flex-col justify-between">
       <div>
@@ -35,16 +49,24 @@ export function CreatorIntelligencePanel({
         </div>
 
         {/* AI Insight Callout Card */}
-        <div className="p-4 rounded-xl bg-[#FFF5ED] border border-[#FFE2D1] flex items-start gap-3 mt-1">
-          <div className="p-2 rounded-lg bg-[#FF6B00]/10 text-[#FF6B00] shrink-0 mt-0.5">
+        <div className={`p-4 rounded-xl border flex items-start gap-3 mt-1 ${
+          hasIntelligence 
+            ? 'bg-[#FFF5ED] border-[#FFE2D1]' 
+            : 'bg-[#F8F6F2] border-[#E7E1DA]'
+        }`}>
+          <div className={`p-2 rounded-lg shrink-0 mt-0.5 ${
+            hasIntelligence 
+              ? 'bg-[#FF6B00]/10 text-[#FF6B00]' 
+              : 'bg-neutral-200 text-neutral-600'
+          }`}>
             <Lightbulb className="w-4 h-4" />
           </div>
           <div>
             <div className="text-xs font-bold text-[#171717] leading-tight">
-              {insightTitle}
+              {displayTitle}
             </div>
             <p className="text-xs text-[#737373] mt-1 leading-relaxed">
-              {insightBody}
+              {displayBody}
             </p>
           </div>
         </div>
@@ -57,7 +79,7 @@ export function CreatorIntelligencePanel({
         </div>
 
         {/* Opportunities List */}
-        <RecommendedOpportunityList />
+        <RecommendedOpportunityList opportunities={opportunities} isLoading={isLoading} />
       </div>
     </section>
   );

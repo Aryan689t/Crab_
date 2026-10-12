@@ -115,9 +115,9 @@ export function Sidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-[#17182B] truncate">
-              {user?.displayName || (isBrand ? 'Acme Brand' : 'Alex Chen')}
+              {user?.displayName || (isBrand ? 'Brand' : 'Creator')}
             </p>
-            <p className="text-[11px] text-[#8B90A5] truncate">{user?.email || 'user@crab.local'}</p>
+            <p className="text-[11px] text-[#8B90A5] truncate">{user?.email || ''}</p>
           </div>
         </div>
       </div>

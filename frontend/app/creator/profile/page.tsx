@@ -1,20 +1,15 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Save,
   CheckCircle2,
-  User,
-  Globe,
-  Tag,
   Check,
   RefreshCw,
   ArrowRight,
-  ShieldCheck,
-  IndianRupee,
   Link2,
+  ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../../../lib/auth-context';
 import { fetchApi } from '../../../lib/api';
@@ -36,17 +31,13 @@ const SUGGESTED_NICHES = [
 
 export default function CreatorProfilePage() {
   const { user, token, updateUser } = useAuth();
-  const router = useRouter();
 
-  const [displayName, setDisplayName] = useState('Alex Chen');
-  const [bio, setBio] = useState('Fullstack software engineer breaking down cloud, AI and developer tools.');
-  const [location, setLocation] = useState('Bengaluru, India');
-  const [selectedNiches, setSelectedNiches] = useState<string[]>([
-    'Technology',
-    'AI & Machine Learning',
-    'Software Engineering',
-  ]);
-  const [rateEstimate, setRateEstimate] = useState('45000');
+  const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [bio, setBio] = useState('');
+  const [location, setLocation] = useState('');
+  const [selectedNiches, setSelectedNiches] = useState<string[]>([]);
+  const [rateEstimate, setRateEstimate] = useState('');
+  const [socialAccounts, setSocialAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -57,14 +48,33 @@ export default function CreatorProfilePage() {
       if (!token) return;
       setLoading(true);
       try {
-        const res = await fetchApi<any>('/api/creators/me', {}, token).catch(() => null);
-        if (mounted && res?.data) {
-          if (res.data.displayName) setDisplayName(res.data.displayName);
-          if (res.data.bio) setBio(res.data.bio);
-          if (res.data.location) setLocation(res.data.location);
-          if (res.data.preferences?.niches) setSelectedNiches(res.data.preferences.niches);
-          if (res.data.preferences?.rateEstimate) setRateEstimate(res.data.preferences.rateEstimate);
+        const [profileRes, accountsRes] = await Promise.allSettled([
+          fetchApi<any>('/api/creators/me', {}, token),
+          fetchApi<any>('/api/social/accounts', {}, token),
+        ]);
+
+        if (!mounted) return;
+
+        if (profileRes.status === 'fulfilled' && profileRes.value?.data) {
+          const data = profileRes.value.data;
+          if (data.displayName) setDisplayName(data.displayName);
+          if (data.bio) setBio(data.bio);
+          if (data.location) setLocation(data.location);
+          if (data.preferences?.niches && Array.isArray(data.preferences.niches)) {
+            setSelectedNiches(data.preferences.niches);
+          } else if (data.aiProfile?.primaryNiches && Array.isArray(data.aiProfile.primaryNiches)) {
+            setSelectedNiches(data.aiProfile.primaryNiches);
+          }
+          if (data.preferences?.rateEstimate) {
+            setRateEstimate(String(data.preferences.rateEstimate));
+          }
         }
+
+        if (accountsRes.status === 'fulfilled' && accountsRes.value?.data) {
+          setSocialAccounts(accountsRes.value.data);
+        }
+      } catch (err) {
+        console.error('[PROFILE_LOAD_ERROR]', err);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -88,10 +98,10 @@ export default function CreatorProfilePage() {
   const completionScore = (() => {
     let score = 0;
     if (displayName.trim()) score += 20;
-    if (bio.trim().length > 20) score += 20;
+    if (bio.trim().length >= 10) score += 20;
     if (location.trim()) score += 20;
-    if (selectedNiches.length >= 2) score += 20;
-    if (rateEstimate) score += 20;
+    if (selectedNiches.length >= 1) score += 20;
+    if (socialAccounts.some((a) => a.status === 'CONNECTED')) score += 20;
     return score;
   })();
 
@@ -102,23 +112,32 @@ export default function CreatorProfilePage() {
 
     try {
       if (token) {
-        await fetchApi(
+        const res = await fetchApi<any>(
           '/api/creators/me',
           {
             method: 'PATCH',
             body: JSON.stringify({
-              displayName,
-              bio,
-              location,
-              preferences: { niches: selectedNiches, rateEstimate },
+              displayName: displayName.trim(),
+              bio: bio.trim(),
+              location: location.trim(),
+              preferences: {
+                niches: selectedNiches,
+                rateEstimate: rateEstimate.trim(),
+              },
             }),
           },
           token
         );
+
+        if (res?.data) {
+          if (res.data.displayName) setDisplayName(res.data.displayName);
+          if (res.data.bio !== undefined) setBio(res.data.bio || '');
+          if (res.data.location !== undefined) setLocation(res.data.location || '');
+        }
       }
 
-      if (updateUser) {
-        updateUser({ displayName });
+      if (updateUser && displayName.trim()) {
+        updateUser({ displayName: displayName.trim() });
       }
 
       setSavedSuccess(true);
@@ -127,6 +146,22 @@ export default function CreatorProfilePage() {
       console.error('[PROFILE_SAVE_ERROR]', err);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const getPlatformIcon = (platform: string) => {
+    switch (platform.toUpperCase()) {
+      case 'YOUTUBE':
+        return <YouTubeIcon className="w-4 h-4" />;
+      case 'INSTAGRAM':
+        return <InstagramIcon className="w-4 h-4" />;
+      case 'TIKTOK':
+        return <TikTokIcon className="w-4 h-4 text-black" />;
+      case 'X':
+      case 'TWITTER':
+        return <XTwitterIcon className="w-4 h-4 text-black" />;
+      default:
+        return <Link2 className="w-4 h-4 text-[#737373]" />;
     }
   };
 
@@ -202,6 +237,7 @@ export default function CreatorProfilePage() {
                 <input
                   type="text"
                   required
+                  placeholder="e.g. Maya Tech Reviews"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] text-xs sm:text-sm text-[#171717] focus:outline-none transition"
@@ -212,6 +248,7 @@ export default function CreatorProfilePage() {
                 <label className="text-xs font-bold text-[#171717]">Location / Base City</label>
                 <input
                   type="text"
+                  placeholder="e.g. Bengaluru, India"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] text-xs sm:text-sm text-[#171717] focus:outline-none transition"
@@ -223,7 +260,7 @@ export default function CreatorProfilePage() {
               <label className="text-xs font-bold text-[#171717]">Channel Bio & Editorial Persona</label>
               <textarea
                 rows={3}
-                required
+                placeholder="Describe your channel focus, technical themes, and audience demographic..."
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 className="w-full p-3 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] text-xs sm:text-sm text-[#171717] focus:outline-none transition resize-none"
@@ -282,6 +319,7 @@ export default function CreatorProfilePage() {
                 </span>
                 <input
                   type="number"
+                  placeholder="50000"
                   value={rateEstimate}
                   onChange={(e) => setRateEstimate(e.target.value)}
                   className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] text-xs sm:text-sm text-[#171717] focus:outline-none transition"
@@ -292,42 +330,69 @@ export default function CreatorProfilePage() {
 
           {/* Section D: Connected Channels */}
           <div className="bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs space-y-4">
-            <div className="pb-3 border-b border-[#E7E1DA]">
-              <h3 className="font-bold text-sm text-[#171717]">Connected Social Accounts</h3>
-              <p className="text-xs text-[#737373] mt-0.5">
-                Authorized channels feeding views and metrics into CRAB.
-              </p>
+            <div className="pb-3 border-b border-[#E7E1DA] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="font-bold text-sm text-[#171717]">Connected Social Accounts</h3>
+                <p className="text-xs text-[#737373] mt-0.5">
+                  Verified platforms feeding audience metrics and content into CRAB.
+                </p>
+              </div>
+              <Link
+                href="/creator/onboarding"
+                className="text-xs font-semibold text-[#FF6B00] hover:underline inline-flex items-center gap-1 self-start sm:self-auto"
+              >
+                <span>Account Connect Portal</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </Link>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
-                { name: 'YouTube', handle: '@alexchen_tech', icon: YouTubeIcon, connected: true },
-                { name: 'Instagram', handle: '@alexchen.dev', icon: InstagramIcon, connected: true },
-                { name: 'TikTok', handle: '@alexchen_code', icon: TikTokIcon, connected: true },
-                { name: 'X / Twitter', handle: '@alexchen_dev', icon: XTwitterIcon, connected: true },
-              ].map((acc) => {
-                const Icon = acc.icon;
-                return (
-                  <div
-                    key={acc.name}
-                    className="p-3.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className="p-1 rounded bg-white border border-[#E7E1DA] shrink-0">
-                        <Icon className="w-4 h-4" />
-                      </span>
-                      <div>
-                        <div className="text-xs font-bold text-[#171717]">{acc.name}</div>
-                        <div className="text-[11px] text-[#737373]">{acc.handle}</div>
+            {socialAccounts.length === 0 ? (
+              <div className="p-4 rounded-xl bg-[#F8F6F2]/70 border border-dashed border-[#E7E1DA] text-center space-y-2">
+                <div className="text-xs font-semibold text-[#171717]">No connected accounts</div>
+                <p className="text-[11px] text-[#737373] max-w-md mx-auto">
+                  Connect your YouTube channel or Instagram business account through the connect portal to automatically verify followers and views.
+                </p>
+                <Link
+                  href="/creator/onboarding"
+                  className="inline-block mt-2 px-4 py-1.5 rounded-xl bg-[#FF6B00] text-white text-xs font-bold hover:bg-[#e05e00] transition"
+                >
+                  Connect Platforms
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {socialAccounts.map((acc: any) => {
+                  const isConnected = acc.status === 'CONNECTED';
+                  return (
+                    <div
+                      key={acc.id || acc.platform}
+                      className="p-3.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="p-1 rounded bg-white border border-[#E7E1DA] shrink-0">
+                          {getPlatformIcon(acc.platform)}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-[#171717]">{acc.platform}</div>
+                          <div className="text-[11px] text-[#737373] truncate">
+                            {acc.platformUsername ? `@${acc.platformUsername}` : acc.handle || 'Connected Channel'}
+                          </div>
+                        </div>
                       </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                          isConnected
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}
+                      >
+                        {isConnected ? 'Connected' : 'Pending Authorization'}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Connected
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Form Actions */}

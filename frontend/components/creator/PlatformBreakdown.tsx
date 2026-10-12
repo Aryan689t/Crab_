@@ -3,25 +3,20 @@
 import React from 'react';
 import { YouTubeIcon, InstagramIcon, TikTokIcon, XTwitterIcon } from './BrandIcons';
 
-interface PlatformStat {
+export interface PlatformStat {
   platform: 'YOUTUBE' | 'INSTAGRAM' | 'TIKTOK' | 'X';
   name: string;
   count: string;
   growth: string;
+  handle?: string;
+  isConnected?: boolean;
 }
 
-interface PlatformBreakdownProps {
+export interface PlatformBreakdownProps {
   stats?: PlatformStat[];
 }
 
-const DEFAULT_PLATFORM_STATS: PlatformStat[] = [
-  { platform: 'YOUTUBE', name: 'YouTube', count: '72.1K', growth: '+11.3%' },
-  { platform: 'INSTAGRAM', name: 'Instagram', count: '48.6K', growth: '+14.2%' },
-  { platform: 'TIKTOK', name: 'TikTok', count: '28.4K', growth: '+18.1%' },
-  { platform: 'X', name: 'X / Twitter', count: '12.3K', growth: '+6.4%' },
-];
-
-export function PlatformBreakdown({ stats = DEFAULT_PLATFORM_STATS }: PlatformBreakdownProps) {
+export function PlatformBreakdown({ stats = [] }: PlatformBreakdownProps) {
   const getIcon = (platform: PlatformStat['platform']) => {
     switch (platform) {
       case 'YOUTUBE':
@@ -34,6 +29,14 @@ export function PlatformBreakdown({ stats = DEFAULT_PLATFORM_STATS }: PlatformBr
         return <XTwitterIcon className="w-4 h-4 text-black" />;
     }
   };
+
+  if (!stats || stats.length === 0) {
+    return (
+      <div className="pt-4 border-t border-[#E7E1DA] text-center py-3 text-xs text-[#737373] bg-[#F8F6F2]/40 rounded-xl">
+        No platform accounts connected yet. Connect your YouTube channel or Instagram profile to display verified audience breakdowns.
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-[#E7E1DA]">
@@ -49,8 +52,8 @@ export function PlatformBreakdown({ stats = DEFAULT_PLATFORM_STATS }: PlatformBr
             <div className="text-xs font-bold text-[#171717] leading-tight truncate">
               {item.count}
             </div>
-            <div className="text-[10px] text-emerald-600 font-semibold leading-tight">
-              {item.growth}
+            <div className="text-[10px] text-neutral-600 truncate">
+              {item.handle || item.name}
             </div>
           </div>
         </div>

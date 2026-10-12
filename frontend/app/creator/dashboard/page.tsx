@@ -4,15 +4,17 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../lib/auth-context';
 import { fetchApi } from '../../../lib/api';
-import { Users, Eye, TrendingUp, Layers, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Users, Eye, TrendingUp, Layers, CheckCircle2 } from 'lucide-react';
 
 import dynamic from 'next/dynamic';
 import { CreatorHeader } from '../../../components/creator/CreatorHeader';
-import { CreatorProfileBanner } from '../../../components/creator/CreatorProfileBanner';
+import { CreatorProfileBanner, BannerSocialAccount } from '../../../components/creator/CreatorProfileBanner';
 import { CreatorMetricCard } from '../../../components/creator/CreatorMetricCard';
 import { CreatorIntelligencePanel } from '../../../components/creator/CreatorIntelligencePanel';
-import { ProfileCompletionPanel } from '../../../components/creator/ProfileCompletionPanel';
-import { RecentActivityList } from '../../../components/creator/RecentActivityList';
+import { ProfileCompletionPanel, CompletionStep } from '../../../components/creator/ProfileCompletionPanel';
+import { RecentActivityList, ActivityItem } from '../../../components/creator/RecentActivityList';
+import { OpportunityItem } from '../../../components/creator/RecommendedOpportunityList';
+import { PlatformStat } from '../../../components/creator/PlatformBreakdown';
 
 const AudienceGrowthChart = dynamic(
   () => import('../../../components/creator/AudienceGrowthChart').then((mod) => mod.AudienceGrowthChart),
@@ -29,9 +31,10 @@ export default function CreatorDashboardPage() {
   const [profile, setProfile] = useState<any>(null);
   const [metrics, setMetrics] = useState<any>(null);
   const [intelligence, setIntelligence] = useState<any>(null);
+  const [opportunities, setOpportunities] = useState<OpportunityItem[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,10 +49,19 @@ export default function CreatorDashboardPage() {
       const fetchAllData = async (authToken: string) => {
         setLoading(true);
         try {
-          const [profileRes, metricsRes, intelRes, accountsRes] = await Promise.allSettled([
+          const [
+            profileRes,
+            metricsRes,
+            intelRes,
+            oppsRes,
+            actRes,
+            accountsRes,
+          ] = await Promise.allSettled([
             fetchApi<any>('/api/creators/me', {}, authToken),
             fetchApi<any>('/api/creators/me/metrics', {}, authToken),
             fetchApi<any>('/api/creators/me/intelligence', {}, authToken),
+            fetchApi<any>('/api/creators/me/opportunities', {}, authToken),
+            fetchApi<any>('/api/creators/me/activity', {}, authToken),
             fetchApi<any>('/api/social/accounts', {}, authToken),
           ]);
 
@@ -63,6 +75,18 @@ export default function CreatorDashboardPage() {
           }
           if (intelRes.status === 'fulfilled' && intelRes.value?.data) {
             setIntelligence(intelRes.value.data);
+          }
+          if (oppsRes.status === 'fulfilled' && oppsRes.value?.data) {
+            const opps = Array.isArray(oppsRes.value.data)
+              ? oppsRes.value.data
+              : oppsRes.value.data.opportunities || [];
+            setOpportunities(opps);
+          }
+          if (actRes.status === 'fulfilled' && actRes.value?.data) {
+            const acts = Array.isArray(actRes.value.data)
+              ? actRes.value.data
+              : actRes.value.data.activities || [];
+            setActivities(acts);
           }
           if (accountsRes.status === 'fulfilled' && accountsRes.value?.data) {
             setAccounts(accountsRes.value.data);
@@ -84,35 +108,7 @@ export default function CreatorDashboardPage() {
     };
   }, [user?.id, user?.role, authLoading, token, router]);
 
-  const handleConnectSocial = async () => {
-    setSyncing(true);
-    setSyncMessage(null);
-    try {
-      if (token) {
-        await fetchApi('/api/social/accounts/social_yt_01/sync', { method: 'POST' }, token);
-        const [profileRes, metricsRes] = await Promise.allSettled([
-          fetchApi<any>('/api/creators/me', {}, token),
-          fetchApi<any>('/api/creators/me/metrics', {}, token),
-        ]);
-        if (profileRes.status === 'fulfilled' && profileRes.value?.data) {
-          setProfile(profileRes.value.data);
-        }
-        if (metricsRes.status === 'fulfilled' && metricsRes.value?.data) {
-          setMetrics(metricsRes.value.data);
-        }
-        setSyncMessage('Social accounts synchronized successfully.');
-      } else {
-        setSyncMessage('Demo account connected & synced.');
-      }
-    } catch {
-      setSyncMessage('Account sync completed with latest snapshots.');
-    } finally {
-      setSyncing(false);
-      setTimeout(() => setSyncMessage(null), 4000);
-    }
-  };
-
-  // Only show skeleton if actively authenticating with a token and fetching for the first time
+  // Loading skeleton during initial fetch
   if (token && loading && !profile) {
     return (
       <div className="min-h-screen bg-[#F8F6F2] p-6 md:p-8 space-y-6 animate-pulse">
@@ -131,29 +127,103 @@ export default function CreatorDashboardPage() {
     );
   }
 
-  // Derive display values from real API data or verified fallbacks
-  const displayName = profile?.displayName || user?.displayName || 'Alex Chen';
-  const avatarUrl =
-    profile?.profileImageUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200';
-  const bio =
-    profile?.bio || 'Fullstack software engineer breaking down cloud, AI and developer tools.';
-  const niches =
-    intelligence?.primaryNiches ||
-    profile?.aiProfile?.primaryNiches || ['Technology', 'AI & Machine Learning', 'Software Engineering'];
+  // Derive real display values
+  const displayName = profile?.displayName || user?.displayName || 'Creator';
+  const avatarUrl = profile?.profileImageUrl || undefined;
+  const bio = profile?.bio || undefined;
+  const niches = profile?.niches || intelligence?.primaryNiches || [];
+
+  // Determine connected social accounts
+  const connectedSocials: BannerSocialAccount[] = (accounts || [])
+    .filter((a: any) => a.status === 'CONNECTED')
+    .map((a: any) => {
+      const u = a.platformUsername || a.username || a.handle;
+      return {
+        platform: a.platform,
+        username: u,
+        profileUrl: a.profileUrl || (a.platform === 'YOUTUBE' ? (u ? `https://youtube.com/${u.startsWith('@') ? u : `@${u}`}` : undefined) : (u ? `https://instagram.com/${u.replace(/^@/, '')}` : undefined)),
+      };
+    });
+
+  // Platform stats for breakdown
+  const platformStats: PlatformStat[] = (accounts || [])
+    .filter((a: any) => a.status === 'CONNECTED')
+    .map((a: any) => {
+      const followers = a.metrics?.subscribers || a.metrics?.followers || a.stats?.subscriberCount || a.stats?.followerCount;
+      const u = a.platformUsername || a.username || a.handle;
+      return {
+        platform: a.platform as PlatformStat['platform'],
+        name: a.platform === 'YOUTUBE' ? 'YouTube' : a.platform === 'INSTAGRAM' ? 'Instagram' : a.platform,
+        count: typeof followers === 'number'
+          ? followers >= 1000 ? `${(followers / 1000).toFixed(1)}K` : `${followers}`
+          : 'Connected',
+        growth: 'Verified',
+        handle: u ? (u.startsWith('@') ? u : `@${u}`) : undefined,
+        isConnected: true,
+      };
+    });
 
   // KPI Metrics (using live backend metrics if available)
-  const audienceValue = metrics?.followers
-    ? `${(metrics.followers / 1000).toFixed(1)}K`
-    : '124.5K';
-  const viewsValue = metrics?.averageViews
-    ? `${(metrics.averageViews / 1000).toFixed(1)}K`
-    : '48.2K';
-  const engagementValue = metrics?.engagementRate
-    ? `${metrics.engagementRate}%`
-    : '5.6%';
-  const cadenceValue = metrics?.postingFrequency
-    ? `${metrics.postingFrequency} / week`
-    : '3.4 / week';
+  const hasMetrics = !!metrics?.hasData;
+  const audienceValue = hasMetrics && typeof metrics.followers === 'number'
+    ? metrics.followers >= 1000 ? `${(metrics.followers / 1000).toFixed(1)}K` : `${metrics.followers}`
+    : '—';
+  const viewsValue = hasMetrics && typeof metrics.averageViews === 'number'
+    ? metrics.averageViews >= 1000 ? `${(metrics.averageViews / 1000).toFixed(1)}K` : `${metrics.averageViews}`
+    : '—';
+  const engagementValue = hasMetrics && typeof metrics.engagementRate === 'number'
+    ? `${metrics.engagementRate.toFixed(1)}%`
+    : '—';
+  const cadenceValue = hasMetrics && typeof metrics.postingFrequency === 'number'
+    ? `${metrics.postingFrequency} / wk`
+    : '—';
+
+  // Dynamic Profile Completion Calculation
+  const hasBio = Boolean(profile?.bio && profile.bio.trim().length > 0);
+  const hasNiches = Boolean(niches && niches.length > 0);
+  const hasLocation = Boolean(profile?.location && profile.location.trim().length > 0);
+  const hasConnectedAccount = connectedSocials.length > 0;
+
+  let completionScore = 0;
+  if (hasBio) completionScore += 25;
+  if (hasNiches) completionScore += 25;
+  if (hasLocation) completionScore += 25;
+  if (hasConnectedAccount) completionScore += 25;
+
+  const completionSteps: CompletionStep[] = [
+    {
+      id: 'step-social',
+      title: 'Connect your social account',
+      subtitle: 'Authorizes CRAB to verify your metrics for brand deals',
+      actionText: 'Connect',
+      actionHref: '/creator/profile',
+      completed: hasConnectedAccount,
+    },
+    {
+      id: 'step-niches',
+      title: 'Specify content niches',
+      subtitle: 'Helps matching algorithms recommend relevant campaigns',
+      actionText: 'Add niches',
+      actionHref: '/creator/profile',
+      completed: hasNiches,
+    },
+    {
+      id: 'step-bio',
+      title: 'Add creator bio',
+      subtitle: 'Give brands a clear summary of your channel and content',
+      actionText: 'Add bio',
+      actionHref: '/creator/profile',
+      completed: hasBio,
+    },
+    {
+      id: 'step-location',
+      title: 'Add your location',
+      subtitle: 'Allows brands targeting specific regions to discover you',
+      actionText: 'Add location',
+      actionHref: '/creator/profile',
+      completed: hasLocation,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
@@ -183,9 +253,11 @@ export default function CreatorDashboardPage() {
           avatarUrl={avatarUrl}
           bio={bio}
           niches={niches}
-          totalFollowers={audienceValue}
-          engagementRate="8.4%"
-          isVerified={true}
+          totalFollowers={metrics?.followers}
+          engagementRate={metrics?.engagementRate}
+          hasMetrics={hasMetrics}
+          isVerified={Boolean(profile?.isVerified || hasConnectedAccount)}
+          socialAccounts={connectedSocials}
         />
 
         {/* 3. Four Compact KPI Metric Cards */}
@@ -193,33 +265,30 @@ export default function CreatorDashboardPage() {
           <CreatorMetricCard
             label="Audience Size"
             value={audienceValue}
-            trend="↑ 12.4% this month"
-            isPositive={true}
+            subtext={hasMetrics ? 'Total verified audience' : 'Connect account to track'}
             icon={Users}
-            sparklineVariant={1}
+            hasData={hasMetrics}
           />
           <CreatorMetricCard
             label="Average Views"
             value={viewsValue}
-            trend="↑ 8.7% this month"
-            isPositive={true}
+            subtext={hasMetrics ? 'Per recent post' : 'Requires content sync'}
             icon={Eye}
-            sparklineVariant={2}
+            hasData={hasMetrics}
           />
           <CreatorMetricCard
             label="Engagement Rate"
             value={engagementValue}
-            trend="↑ 1.2% this month"
-            isPositive={true}
+            subtext={hasMetrics ? 'Average interactions' : 'Awaiting metrics'}
             icon={TrendingUp}
-            sparklineVariant={3}
+            hasData={hasMetrics}
           />
           <CreatorMetricCard
             label="Posting Cadence"
             value={cadenceValue}
-            subtext="Consistent schedule"
+            subtext={hasMetrics ? 'Weekly publishing rate' : 'No recent uploads'}
             icon={Layers}
-            sparklineVariant={4}
+            hasData={hasMetrics}
           />
         </section>
 
@@ -227,12 +296,22 @@ export default function CreatorDashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left Column: Audience Growth & Social Platform Breakdown */}
           <div className="lg:col-span-8 space-y-6">
-            <AudienceGrowthChart />
+            <AudienceGrowthChart
+              growthData={metrics?.growthData || []}
+              platformStats={platformStats}
+              isLoading={loading}
+            />
           </div>
 
           {/* Right Column: CRAB Intelligence & Recommended Opportunities */}
           <div className="lg:col-span-4 space-y-6">
-            <CreatorIntelligencePanel />
+            <CreatorIntelligencePanel
+              insightTitle={intelligence?.insightTitle}
+              insightBody={intelligence?.insightBody}
+              hasIntelligence={Boolean(intelligence?.hasIntelligence)}
+              opportunities={opportunities}
+              isLoading={loading}
+            />
           </div>
         </div>
 
@@ -241,14 +320,18 @@ export default function CreatorDashboardPage() {
           {/* Left Column: Profile Completion Progress & Actionable Next Steps */}
           <div className="lg:col-span-7">
             <ProfileCompletionPanel
-              completionPercentage={80}
-              onConnectSocial={handleConnectSocial}
+              completionPercentage={completionScore}
+              steps={completionSteps}
+              onConnectSocial={() => router.push('/creator/profile')}
             />
           </div>
 
           {/* Right Column: Recent Activity Feed */}
           <div className="lg:col-span-5">
-            <RecentActivityList />
+            <RecentActivityList
+              activities={activities}
+              isLoading={loading}
+            />
           </div>
         </div>
       </main>

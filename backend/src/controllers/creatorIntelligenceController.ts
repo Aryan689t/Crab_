@@ -26,6 +26,7 @@ export async function getCreatorIntelligence(
       ? await prisma.creator.findUnique({
           where: { userId },
           select: {
+            preferences: true,
             aiProfile: true,
           },
         })
@@ -35,6 +36,7 @@ export async function getCreatorIntelligence(
       creator = await prisma.creator.findFirst({
         where: { user: { email: userEmail } },
         select: {
+          preferences: true,
           aiProfile: true,
         },
       });
@@ -48,15 +50,35 @@ export async function getCreatorIntelligence(
     }
 
     if (!creator.aiProfile) {
-      res.status(404).json({
-        error: 'Creator intelligence profile has not been generated yet.',
-        message: 'Run the analyze endpoint to generate it.',
+      const creatorPrefs = (creator.preferences as Record<string, any>) || {};
+      const primaryNiches = Array.isArray(creatorPrefs.niches) ? creatorPrefs.niches : [];
+      res.status(200).json({
+        data: {
+          hasIntelligence: false,
+          insightTitle: primaryNiches.length > 0
+            ? `Your ${primaryNiches[0]} focus is ready for audience vectors`
+            : 'Build your initial audience footprint',
+          insightBody: 'Publish content and connect your channel so CRAB Gemini AI can analyze your topics and calculate explainable brand match scores.',
+          primaryNiches,
+          secondaryNiches: [],
+          contentStyle: [],
+          audienceSummary: 'Audience analysis will appear once content snapshots are recorded.',
+          opportunityCategories: [],
+        },
       });
       return;
     }
 
+    const primaryNiches = creator.aiProfile.primaryNiches || [];
     res.status(200).json({
-      data: creator.aiProfile,
+      data: {
+        ...creator.aiProfile,
+        hasIntelligence: true,
+        insightTitle: primaryNiches.length > 0
+          ? `Your ${primaryNiches[0]} content is gaining traction`
+          : 'Audience intelligence snapshot active',
+        insightBody: creator.aiProfile.audienceSummary || 'Your creator vectors are indexed for brand discovery.',
+      },
     });
   } catch (err) {
     next(err);

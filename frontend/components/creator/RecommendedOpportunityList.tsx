@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Sparkles } from 'lucide-react';
 import { AwsLogo, NotionLogo, GitHubLogo } from './BrandIcons';
 
 export interface OpportunityItem {
@@ -12,74 +12,86 @@ export interface OpportunityItem {
   category: string;
   platforms: string;
   matchScore: number;
-  logoType: 'aws' | 'notion' | 'github';
+  logoType?: string;
+  brandLogo?: string | null;
   href?: string;
 }
 
-const DEFAULT_OPPORTUNITIES: OpportunityItem[] = [
-  {
-    id: 'opp-1',
-    brand: 'AWS',
-    title: 'AWS Developer Cloud Campaign',
-    category: 'Developer Tools',
-    platforms: 'YouTube',
-    matchScore: 94,
-    logoType: 'aws',
-    href: '/creator/opportunities',
-  },
-  {
-    id: 'opp-2',
-    brand: 'Notion',
-    title: 'Notion for Creators',
-    category: 'Productivity',
-    platforms: 'YouTube, Instagram',
-    matchScore: 89,
-    logoType: 'notion',
-    href: '/creator/opportunities',
-  },
-  {
-    id: 'opp-3',
-    brand: 'GitHub',
-    title: 'GitHub Copilot Series',
-    category: 'AI Tools',
-    platforms: 'YouTube',
-    matchScore: 86,
-    logoType: 'github',
-    href: '/creator/opportunities',
-  },
-];
-
 export function RecommendedOpportunityList({
-  opportunities = DEFAULT_OPPORTUNITIES,
+  opportunities = [],
+  isLoading = false,
 }: {
   opportunities?: OpportunityItem[];
+  isLoading?: boolean;
 }) {
-  const renderLogo = (type: OpportunityItem['logoType']) => {
-    switch (type) {
-      case 'aws':
-        return <AwsLogo className="w-8 h-8 rounded-lg shrink-0" />;
-      case 'notion':
-        return <NotionLogo className="w-8 h-8 rounded-lg shrink-0" />;
-      case 'github':
-        return (
-          <div className="w-8 h-8 rounded-lg bg-[#171717] text-white flex items-center justify-center p-1.5 shrink-0">
-            <GitHubLogo className="w-full h-full" />
-          </div>
-        );
+  const renderLogo = (opp: OpportunityItem) => {
+    if (opp.brandLogo) {
+      return (
+        <img
+          src={opp.brandLogo}
+          alt={opp.brand}
+          className="w-8 h-8 rounded-lg object-cover shrink-0 border border-[#E7E1DA]"
+        />
+      );
     }
+
+    const type = (opp.logoType || opp.brand.toLowerCase()) as string;
+    if (type.includes('aws')) {
+      return <AwsLogo className="w-8 h-8 rounded-lg shrink-0" />;
+    }
+    if (type.includes('notion')) {
+      return <NotionLogo className="w-8 h-8 rounded-lg shrink-0" />;
+    }
+    if (type.includes('git')) {
+      return (
+        <div className="w-8 h-8 rounded-lg bg-[#171717] text-white flex items-center justify-center p-1.5 shrink-0">
+          <GitHubLogo className="w-full h-full" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="w-8 h-8 rounded-lg bg-[#FF6B00]/10 text-[#FF6B00] font-bold text-xs flex items-center justify-center shrink-0 border border-[#FF6B00]/20">
+        {opp.brand.charAt(0).toUpperCase()}
+      </div>
+    );
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2 py-4">
+        {[1, 2].map((i) => (
+          <div key={i} className="h-16 rounded-xl bg-[#F8F6F2] animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!opportunities || opportunities.length === 0) {
+    return (
+      <div className="p-4 rounded-xl bg-[#F8F6F2]/60 border border-dashed border-[#E7E1DA] text-center space-y-1.5">
+        <div className="flex justify-center">
+          <Sparkles className="w-5 h-5 text-[#FF6B00]" />
+        </div>
+        <div className="text-xs font-semibold text-[#171717]">No opportunities yet</div>
+        <p className="text-[11px] text-[#737373] leading-relaxed">
+          Publish your first pieces of content and complete your creator profile so CRAB can assess your content, understand your niche, and identify relevant brand opportunities. We&apos;ll show matches when suitable campaigns and sufficient creator data are available.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2.5">
       {opportunities.map((opp) => (
         <Link
           key={opp.id}
-          href={opp.href || '/creator/opportunities'}
+          href={opp.href || `/creator/opportunities?campaign=${opp.id}`}
           className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#E7E1DA] hover:border-[#FF6B00]/40 hover:bg-[#FDFBF7] transition group shadow-2xs"
         >
           {/* Left Brand + Details */}
           <div className="flex items-center gap-3 min-w-0 pr-2">
-            {renderLogo(opp.logoType)}
+            {renderLogo(opp)}
             <div className="min-w-0">
               <div className="text-xs font-semibold text-[#171717] group-hover:text-[#FF6B00] transition truncate">
                 {opp.title}
