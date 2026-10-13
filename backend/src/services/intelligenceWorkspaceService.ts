@@ -155,13 +155,13 @@ export async function getComprehensiveCreatorIntelligence(
   const ytVideos = contents.filter((c) => c.platform === 'YOUTUBE');
   const igPosts = contents.filter((c) => c.platform === 'INSTAGRAM');
   const totalComments = contents.reduce((acc, c) => acc + (c.comments || 0), 0);
-  const hasYtAccount = accounts.some((a) => a.platform === 'YOUTUBE' && a.status === 'CONNECTED');
+  const hasVerifiedAccount = accounts.some((a) => a.status === 'CONNECTED');
 
   const analysisCoverage = {
     youtubeVideosCount: ytVideos.length,
     instagramPostsCount: igPosts.length,
     recentCommentsCount: totalComments,
-    channelMetadataVerified: hasYtAccount,
+    channelMetadataVerified: hasVerifiedAccount,
     lastAnalyzed: aiProfile?.generatedAt
       ? aiProfile.generatedAt.toLocaleDateString('en-US', {
           month: 'short',

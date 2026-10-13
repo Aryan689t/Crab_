@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { config } from '../config/env.js';
 import { syncCreatorYouTube, resolveYouTubeChannel, parseYouTubeInput } from '../integrations/youtube/index.js';
+import { syncCreatorInstagram } from '../integrations/instagram/index.js';
 
 const creatorProfileSchema = z.object({
   displayName: z.string().min(2, 'Display name must be at least 2 characters'),
@@ -225,6 +226,15 @@ export async function upsertCreatorProfile(req: Request, res: Response, next: Ne
           await syncCreatorYouTube(creator.id, ytUrl.trim());
         } catch (ytErr: any) {
           console.warn('[PROFILE_UPDATE] YouTube sync note:', ytErr.message);
+        }
+      }
+
+      const igUrl = (parsed.preferences as any)?.instagramUrl || (req.body as any)?.instagramUrl;
+      if (igUrl && typeof igUrl === 'string' && igUrl.trim()) {
+        try {
+          await syncCreatorInstagram(creator.id, igUrl.trim());
+        } catch (igErr: any) {
+          console.warn('[PROFILE_UPDATE] Instagram sync note:', igErr.message);
         }
       }
     } catch (dbErr) {
@@ -846,36 +856,45 @@ export async function completeCreatorOnboarding(req: Request, res: Response, nex
       }
     }
 
+    let resolvedIgThumbnail: string | null = null;
     if (normalizedInstagram) {
-      const existingIg = creator.socialAccounts.find((sa) => sa.platform === 'INSTAGRAM');
-      const igRef = JSON.stringify({
-        profileUrl: normalizedInstagram,
-        handle: igHandle,
-        ownershipVerified: false,
-        connectionState: 'PUBLIC_PROFILE_ADDED',
-      });
-      if (existingIg) {
-        await prisma.socialAccount.update({
-          where: { id: existingIg.id },
-          data: {
-            username: igHandle,
-            authorizationReference: igRef,
-            status: 'CONNECTED',
-            lastSyncedAt: new Date(),
-          },
+      try {
+        const syncResult = await syncCreatorInstagram(creator.id, normalizedInstagram);
+        if (syncResult.profile?.profilePictureUrl) {
+          resolvedIgThumbnail = syncResult.profile.profilePictureUrl;
+        }
+      } catch (igErr: any) {
+        console.warn('[ONBOARDING] Instagram sync note:', igErr.message);
+        const existingIg = creator.socialAccounts.find((sa) => sa.platform === 'INSTAGRAM');
+        const igRef = JSON.stringify({
+          profileUrl: normalizedInstagram,
+          handle: igHandle,
+          ownershipVerified: false,
+          connectionState: 'PUBLIC_PROFILE_ADDED',
         });
-      } else {
-        await prisma.socialAccount.create({
-          data: {
-            creatorId: creator.id,
-            platform: 'INSTAGRAM',
-            platformAccountId: `ig_${creator.id}`,
-            username: igHandle,
-            authorizationReference: igRef,
-            status: 'CONNECTED',
-            lastSyncedAt: new Date(),
-          },
-        });
+        if (existingIg) {
+          await prisma.socialAccount.update({
+            where: { id: existingIg.id },
+            data: {
+              username: igHandle,
+              authorizationReference: igRef,
+              status: 'CONNECTED',
+              lastSyncedAt: new Date(),
+            },
+          });
+        } else {
+          await prisma.socialAccount.create({
+            data: {
+              creatorId: creator.id,
+              platform: 'INSTAGRAM',
+              platformAccountId: `ig_${creator.id}`,
+              username: igHandle,
+              authorizationReference: igRef,
+              status: 'CONNECTED',
+              lastSyncedAt: new Date(),
+            },
+          });
+        }
       }
     }
 
@@ -896,12 +915,14 @@ export async function completeCreatorOnboarding(req: Request, res: Response, nex
       ...(normalizedInstagram ? { instagramUrl: normalizedInstagram } : {}),
     };
 
+    const avatarCandidate = resolvedYtThumbnail || resolvedIgThumbnail;
+
     const updatedCreator = await prisma.creator.update({
       where: { id: creator.id },
       data: {
         preferences: updatedPreferences,
         contactInformation: updatedContact,
-        ...(!creator.profileImageUrl && resolvedYtThumbnail ? { profileImageUrl: resolvedYtThumbnail } : {}),
+        ...(!creator.profileImageUrl && avatarCandidate ? { profileImageUrl: avatarCandidate } : {}),
       },
       include: {
         socialAccounts: true,

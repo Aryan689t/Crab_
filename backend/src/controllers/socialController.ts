@@ -10,6 +10,12 @@ import {
   syncCreatorYouTube,
   verifyVideoBelongsToChannel,
 } from '../integrations/youtube/index.js';
+import {
+  generateInstagramAuthUrl,
+  validateInstagramOAuthState,
+  exchangeInstagramCodeForTokens,
+  syncCreatorInstagram,
+} from '../integrations/instagram/index.js';
 
 /**
  * GET /api/social/accounts
@@ -52,41 +58,58 @@ export async function getConnectedAccounts(req: Request, res: Response, next: Ne
       const isOwner = Boolean(refData.ownershipVerified);
       const connectionState = refData.connectionState || (isOwner ? 'OWNER_AUTHORIZED' : 'PUBLIC_DATA_AVAILABLE');
 
+      const isInstagram = acc.platform === 'INSTAGRAM';
+      const handle = isInstagram
+        ? (acc.username.startsWith('@') ? acc.username : `@${acc.username}`)
+        : (refData.customUrl || acc.username);
+      const title = isInstagram
+        ? (refData.name || acc.username)
+        : (refData.channelTitle || acc.username);
+      const thumbnail = isInstagram
+        ? (refData.profilePictureUrl || '')
+        : (refData.thumbnailUrl || '');
+      const followers = refData.followersCount ?? refData.subscriberCount ?? null;
+
       return {
         id: acc.id,
         platform: acc.platform,
         channelId: acc.platformAccountId,
         username: acc.username,
-        handle: refData.customUrl || acc.username,
-        title: refData.channelTitle || acc.username,
-        thumbnailUrl: refData.thumbnailUrl || '',
+        handle,
+        title,
+        thumbnailUrl: thumbnail,
         status: acc.status,
         ownershipVerified: isOwner,
         connectionState,
         connectedAt: acc.connectedAt,
         lastSyncedAt: acc.lastSyncedAt,
         stats: {
-          subscriberCount: refData.subscriberCount ?? null,
+          subscriberCount: followers,
+          followerCount: followers,
           viewCount: refData.viewCount ?? null,
-          videoCount: refData.videoCount ?? acc.contents.length,
-          averageViews: refData.averageViews ?? null,
+          videoCount: refData.mediaCount ?? refData.videoCount ?? acc.contents.length,
+          averageViews: refData.averageViews ?? refData.averageInteractions ?? null,
           engagementRate: refData.engagementRate ?? null,
         },
         metrics: {
-          subscribers: refData.subscriberCount ?? null,
-          followers: refData.subscriberCount ?? null,
+          subscribers: followers,
+          followers: followers,
           views: refData.viewCount ?? null,
-          videos: refData.videoCount ?? acc.contents.length,
-          averageViews: refData.averageViews ?? null,
+          videos: refData.mediaCount ?? refData.videoCount ?? acc.contents.length,
+          averageViews: refData.averageViews ?? refData.averageInteractions ?? null,
           engagementRate: refData.engagementRate ?? null,
         },
         recentVideos: acc.contents.map((c) => ({
           id: c.platformContentId,
-          title: c.title,
-          description: c.description,
+          title: c.title || (isInstagram ? 'Instagram Post' : 'YouTube Video'),
+          description: c.description || c.caption || '',
+          caption: c.caption || '',
           permalink: c.permalink,
           publishedAt: c.publishedAt,
-          thumbnailUrl: `https://i.ytimg.com/vi/${c.platformContentId}/hqdefault.jpg`,
+          thumbnailUrl: c.platform === 'YOUTUBE'
+            ? `https://i.ytimg.com/vi/${c.platformContentId}/hqdefault.jpg`
+            : '',
+          mediaType: c.contentType || 'VIDEO',
           views: c.views !== null ? Number(c.views) : null,
           likes: c.likes ?? null,
           comments: c.comments ?? null,
@@ -460,3 +483,231 @@ export async function disconnectSocialAccount(req: Request, res: Response, next:
     next(err);
   }
 }
+
+/**
+ * GET /api/social/instagram/auth-url
+ * Returns Meta Instagram OAuth 2.0 authorization URL for connecting an Instagram account.
+ */
+export async function getInstagramAuthUrl(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized', message: 'User not authenticated.' });
+      return;
+    }
+
+    const creator = await prisma.creator.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!creator) {
+      res.status(404).json({ error: 'CreatorNotFound', message: 'Creator profile not found.' });
+      return;
+    }
+
+    const appId = config.instagram.appId || config.social.instagramAppId;
+    const appSecret = config.instagram.appSecret || config.social.instagramAppSecret;
+
+    if (!appId || !appSecret) {
+      res.status(400).json({
+        error: 'InstagramOAuthNotConfigured',
+        message:
+          'Meta Instagram OAuth is not configured on the backend. Please add INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET to backend/.env.',
+        instructions: {
+          step1: 'Visit https://developers.facebook.com and create an App (Consumer or Business).',
+          step2: 'Add Instagram Platform (Instagram Login for Business or Instagram Graph API).',
+          step3: 'Configure OAuth Redirect URI: http://localhost:5000/api/social/instagram/callback.',
+          step4: 'Add INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET to backend/.env.',
+        },
+      });
+      return;
+    }
+
+    const { authUrl, state } = generateInstagramAuthUrl(creator.id);
+
+    res.status(200).json({
+      data: { authUrl, state },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/social/instagram/callback
+ * Public redirect callback from Meta Instagram OAuth.
+ */
+export async function handleInstagramOAuthCallback(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { code, state, error, error_description } = req.query as Record<string, string>;
+
+    if (error || !code) {
+      const msg = error_description || error || 'Instagram authorization was denied.';
+      res.redirect(`http://localhost:3000/creator/collaborations?error=${encodeURIComponent(msg)}`);
+      return;
+    }
+
+    const validation = validateInstagramOAuthState(state);
+    if (!validation.valid || !validation.creatorId) {
+      res.redirect(
+        `http://localhost:3000/creator/collaborations?error=${encodeURIComponent(
+          'Security check failed (invalid or expired OAuth state). Please try connecting again.'
+        )}`
+      );
+      return;
+    }
+
+    const { accessToken } = await exchangeInstagramCodeForTokens(code);
+    const syncResult = await syncCreatorInstagram(validation.creatorId, undefined, accessToken);
+
+    res.redirect(
+      `http://localhost:3000/creator/collaborations?instagram_connected=true&username=${encodeURIComponent(
+        syncResult.profile.username
+      )}`
+    );
+  } catch (err: any) {
+    console.error('[INSTAGRAM_CALLBACK_ERROR]', err.message);
+    res.redirect(
+      `http://localhost:3000/creator/collaborations?error=${encodeURIComponent(
+        err.message || 'Instagram authorization failed.'
+      )}`
+    );
+  }
+}
+
+/**
+ * GET /api/social/instagram/media
+ * Returns the creator's real uploaded Instagram media from Content table.
+ */
+export async function getInstagramMedia(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized', message: 'User not authenticated.' });
+      return;
+    }
+
+    const creator = await prisma.creator.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!creator) {
+      res.status(404).json({ error: 'CreatorNotFound', message: 'Creator profile not found.' });
+      return;
+    }
+
+    const media = await prisma.content.findMany({
+      where: {
+        creatorId: creator.id,
+        platform: 'INSTAGRAM',
+      },
+      orderBy: { publishedAt: 'desc' },
+      take: 25,
+    });
+
+    res.status(200).json({
+      data: media.map((m) => ({
+        id: m.platformContentId,
+        title: m.title || 'Instagram Post',
+        caption: m.caption || m.description || '',
+        permalink: m.permalink || `https://www.instagram.com/p/${m.platformContentId}/`,
+        mediaType: m.contentType || 'IMAGE',
+        publishedAt: m.publishedAt?.toISOString() || m.fetchedAt.toISOString(),
+        likes: m.likes ?? 0,
+        comments: m.comments ?? 0,
+        views: m.views !== null ? Number(m.views) : null,
+      })),
+      meta: { total: media.length },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/social/instagram/sync
+ * Manually checks for new posts/reels and updates profile metrics.
+ */
+export async function syncInstagramAccount(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized', message: 'User not authenticated.' });
+      return;
+    }
+
+    const creator = await prisma.creator.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!creator) {
+      res.status(404).json({ error: 'CreatorNotFound', message: 'Creator profile not found.' });
+      return;
+    }
+
+    const result = await syncCreatorInstagram(creator.id);
+
+    res.status(200).json({
+      data: {
+        success: true,
+        profile: result.profile,
+        media: result.media,
+        syncedAt: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/social/instagram/connect-manual
+ * Connects Instagram by public handle or profile URL (for testing or when App Review is pending).
+ */
+export async function connectInstagramManual(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized', message: 'User not authenticated.' });
+      return;
+    }
+
+    const handleOrUrl = req.body?.handleOrUrl || req.body?.instagramUrl || req.body?.handle || '';
+    if (!handleOrUrl || typeof handleOrUrl !== 'string') {
+      res.status(400).json({ error: 'ValidationError', message: 'Instagram handle or profile URL is required.' });
+      return;
+    }
+
+    const creator = await prisma.creator.findFirst({
+      where: {
+        OR: [
+          { userId: req.user.id },
+          ...(req.user.email ? [{ user: { email: req.user.email } }] : []),
+        ],
+      },
+    });
+
+    if (!creator) {
+      res.status(404).json({ error: 'CreatorNotFound', message: 'Creator profile not found.' });
+      return;
+    }
+
+    const result = await syncCreatorInstagram(creator.id, handleOrUrl.trim());
+
+    // Update creator avatar if not set
+    if (!creator.profileImageUrl && result.profile?.profilePictureUrl) {
+      await prisma.creator.update({
+        where: { id: creator.id },
+        data: { profileImageUrl: result.profile.profilePictureUrl },
+      });
+    }
+
+    res.status(200).json({
+      data: {
+        success: true,
+        message: `Instagram profile @${result.profile.username} connected successfully.`,
+        profile: result.profile,
+        media: result.media,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+

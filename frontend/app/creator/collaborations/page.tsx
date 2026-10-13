@@ -12,6 +12,7 @@ import {
   UploadCloud,
   RefreshCw,
   Youtube,
+  Instagram,
   Play,
   Eye,
   Check,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
 import { StarRating } from '../../../components/ui/StarRating';
+import { InstagramIcon } from '../../../components/creator/BrandIcons';
 import { useAuth } from '../../../lib/auth-context';
 import { fetchApi, invalidateApiCache } from '../../../lib/api';
 
@@ -82,6 +84,33 @@ interface UploadedVideoItem {
   thumbnailUrl: string;
 }
 
+interface ConnectedInstagramAccount {
+  id: string;
+  platform: string;
+  accountId: string;
+  username: string;
+  handle: string;
+  title: string;
+  thumbnailUrl?: string;
+  status: string;
+  lastSyncedAt?: string;
+  stats?: {
+    followerCount?: number;
+    mediaCount?: number;
+  };
+}
+
+interface UploadedInstagramMediaItem {
+  id: string;
+  caption?: string;
+  mediaType: string;
+  permalink?: string;
+  thumbnailUrl?: string;
+  publishedAt: string;
+  likeCount?: number;
+  commentsCount?: number;
+}
+
 const DEFAULT_COLLABS: CollaborationItem[] = [
   {
     id: 'collab_acme_cloud',
@@ -129,10 +158,19 @@ export default function CreatorCollaborationsPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
-  // Video submission modal state
+  // Instagram integration state
+  const [instagramAccount, setInstagramAccount] = useState<ConnectedInstagramAccount | null>(null);
+  const [recentInstagramMedia, setRecentInstagramMedia] = useState<UploadedInstagramMediaItem[]>([]);
+  const [isSyncingInstagram, setIsSyncingInstagram] = useState(false);
+  const [manualInstagramModalOpen, setManualInstagramModalOpen] = useState(false);
+  const [manualInstagramHandle, setManualInstagramHandle] = useState('@');
+  const [connectingManualInstagram, setConnectingManualInstagram] = useState(false);
+
+  // Video/Media submission modal state
   const [selectedCollab, setSelectedCollab] = useState<CollaborationItem | null>(null);
   const [selectedDeliverable, setSelectedDeliverable] = useState<DeliverableItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [submissionPlatform, setSubmissionPlatform] = useState<'YOUTUBE' | 'INSTAGRAM'>('YOUTUBE');
   const [selectedVideoId, setSelectedVideoId] = useState<string>('');
   const [customVideoUrl, setCustomVideoUrl] = useState<string>('');
   const [submittingVideo, setSubmittingVideo] = useState(false);
@@ -181,12 +219,22 @@ export default function CreatorCollaborationsPage() {
         if (yt) {
           setYoutubeAccount(yt);
         }
+        const ig = accountsRes.data.find((a: any) => a.platform === 'INSTAGRAM' && a.status === 'CONNECTED');
+        if (ig) {
+          setInstagramAccount(ig);
+        }
       }
 
-      // Fetch uploaded videos
+      // Fetch uploaded YouTube videos
       const videosRes = await fetchApi<{ data: any[] }>('/api/social/youtube/videos', {}, token);
       if (videosRes?.data) {
         setRecentVideos(videosRes.data);
+      }
+
+      // Fetch uploaded Instagram media
+      const igMediaRes = await fetchApi<{ data: any[] }>('/api/social/instagram/media', {}, token);
+      if (igMediaRes?.data) {
+        setRecentInstagramMedia(igMediaRes.data);
       }
     } catch (err: any) {
       console.warn('[COLLABORATIONS] Failed to load live data:', err.message);
@@ -199,14 +247,18 @@ export default function CreatorCollaborationsPage() {
     loadData();
   }, [token]);
 
-  // Handle URL query flags (e.g. ?youtube_connected=true)
+  // Handle URL query flags (e.g. ?youtube_connected=true or ?instagram_connected=true)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('youtube_connected') === 'true') {
         const channelName = params.get('channel') || 'YouTube Channel';
-        setSyncNotice(`Successfully authorized and imported channel: ${channelName}`);
-        // Clean URL without refresh
+        setSyncNotice(`Successfully authorized and imported YouTube channel: ${channelName}`);
+        window.history.replaceState({}, '', '/creator/collaborations');
+        loadData();
+      } else if (params.get('instagram_connected') === 'true') {
+        const igUser = params.get('username') || 'Instagram Account';
+        setSyncNotice(`Successfully authorized and linked Instagram account: @${igUser}`);
         window.history.replaceState({}, '', '/creator/collaborations');
         loadData();
       }
@@ -276,7 +328,7 @@ export default function CreatorCollaborationsPage() {
           setYoutubeAccount((prev) => (prev ? { ...prev, ...res.data.channel } : prev));
         }
         setSyncNotice(
-          `Sync complete! Refreshed channel statistics & ${res.data.videos?.length || 0} recent videos.`
+          `YouTube sync complete! Refreshed channel statistics & ${res.data.videos?.length || 0} recent videos.`
         );
         invalidateApiCache('/api/social');
       }
@@ -287,7 +339,80 @@ export default function CreatorCollaborationsPage() {
     }
   };
 
-  // 5. Open video submission modal
+  // 5. Initiate Meta Instagram OAuth Connection
+  const handleConnectInstagram = async () => {
+    if (!token) return;
+    try {
+      const res = await fetchApi<{ data: { authUrl: string } }>('/api/social/instagram/auth-url', {}, token);
+      if (res?.data?.authUrl) {
+        window.location.href = res.data.authUrl;
+      }
+    } catch (err: any) {
+      console.warn('[INSTAGRAM_OAUTH] Direct OAuth error, opening manual setup option:', err.message);
+      setManualInstagramModalOpen(true);
+    }
+  };
+
+  // 6. Connect Instagram via Handle/Profile URL
+  const handleManualInstagramSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !manualInstagramHandle.trim()) return;
+
+    setConnectingManualInstagram(true);
+    try {
+      const res = await fetchApi<{ data: any }>(
+        '/api/social/instagram/connect-manual',
+        {
+          method: 'POST',
+          body: JSON.stringify({ handleOrUrl: manualInstagramHandle.trim() }),
+        },
+        token
+      );
+
+      if (res?.data?.profile) {
+        setSyncNotice(`Instagram profile @${res.data.profile.username} connected successfully!`);
+        setManualInstagramModalOpen(false);
+        invalidateApiCache('/api/social');
+        loadData();
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to connect Instagram profile.');
+    } finally {
+      setConnectingManualInstagram(false);
+    }
+  };
+
+  // 7. Sync Instagram Posts & Insights
+  const handleSyncInstagram = async () => {
+    if (!token) return;
+    setIsSyncingInstagram(true);
+    setSyncNotice(null);
+
+    try {
+      const res = await fetchApi<{ data: { media: UploadedInstagramMediaItem[]; profile: any } }>(
+        '/api/social/instagram/sync',
+        { method: 'POST' },
+        token
+      );
+
+      if (res?.data) {
+        if (res.data.media) setRecentInstagramMedia(res.data.media);
+        if (res.data.profile) {
+          setInstagramAccount((prev) => (prev ? { ...prev, ...res.data.profile } : prev));
+        }
+        setSyncNotice(
+          `Instagram sync complete! Refreshed account metrics & ${res.data.media?.length || 0} recent posts.`
+        );
+        invalidateApiCache('/api/social');
+      }
+    } catch (err: any) {
+      setSyncNotice('Instagram sync failed: ' + (err.message || 'Please check your connection.'));
+    } finally {
+      setIsSyncingInstagram(false);
+    }
+  };
+
+  // 8. Open deliverable submission modal
   const openSubmitModal = (collab: CollaborationItem, deliverable: DeliverableItem) => {
     setSelectedCollab(collab);
     setSelectedDeliverable(deliverable);
@@ -430,116 +555,230 @@ export default function CreatorCollaborationsPage() {
           </div>
         )}
 
-        {/* YouTube Channel Integration Bar */}
-        <section className="bg-white rounded-3xl p-6 border border-[#E7E1DA] shadow-xs space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                <Youtube className="w-6 h-6" />
-              </div>
+        {/* Social Platforms Integration Section (YouTube & Instagram) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* 1. YouTube Channel Integration */}
+          <section className="bg-white rounded-3xl p-6 border border-[#E7E1DA] shadow-xs space-y-4 flex flex-col justify-between">
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Youtube className="w-6 h-6" />
+                  </div>
 
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-[#171717]">
-                    {youtubeAccount ? youtubeAccount.title || youtubeAccount.username : 'YouTube Channel Integration'}
-                  </h2>
-                  {youtubeAccount ? (
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-green-50 text-green-700 border border-green-200">
-                      CONNECTED
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-neutral-100 text-neutral-600 border border-neutral-200">
-                      NOT CONNECTED
-                    </span>
-                  )}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-[#171717]">
+                        {youtubeAccount ? youtubeAccount.title || youtubeAccount.username : 'YouTube Channel'}
+                      </h2>
+                      {youtubeAccount ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-green-50 text-green-700 border border-green-200">
+                          CONNECTED
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-neutral-100 text-neutral-600 border border-neutral-200">
+                          NOT CONNECTED
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-[#737373] mt-1">
+                      {youtubeAccount
+                        ? `${youtubeAccount.handle || youtubeAccount.username} • ${(
+                            youtubeAccount.stats?.subscriberCount || 0
+                          ).toLocaleString()} Subscribers • ${(youtubeAccount.stats?.videoCount || recentVideos.length).toLocaleString()} Uploads`
+                        : 'Connect via Google OAuth or channel handle to fulfill YouTube video deliverables.'}
+                    </p>
+                  </div>
                 </div>
+              </div>
 
-                <p className="text-xs text-[#737373] mt-1">
-                  {youtubeAccount
-                    ? `${youtubeAccount.handle || youtubeAccount.username} • ${(
-                        youtubeAccount.stats?.subscriberCount || 154000
-                      ).toLocaleString()} Subscribers • ${(youtubeAccount.stats?.videoCount || 12).toLocaleString()} Uploads`
-                    : 'Connect your YouTube channel using Google OAuth to sync uploads and fulfill campaign deliverables.'}
-                </p>
+              <div className="flex items-center gap-2.5 mt-4">
+                {youtubeAccount ? (
+                  <>
+                    <button
+                      onClick={handleSyncYouTube}
+                      disabled={isSyncing}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-[#E7E1DA] hover:bg-[#F8F6F2] text-xs font-bold text-[#171717] transition shadow-xs cursor-pointer disabled:opacity-60"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-[#FF6B00] ${isSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isSyncing ? 'Checking...' : 'Sync Videos'}</span>
+                    </button>
+                    <button
+                      onClick={() => setManualConnectOpen(true)}
+                      className="px-3 py-2 rounded-xl border border-[#E7E1DA] hover:bg-[#F8F6F2] text-xs font-semibold text-neutral-600"
+                    >
+                      Switch Channel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleConnectYouTube}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                    >
+                      <Youtube className="w-4 h-4" />
+                      <span>Connect YouTube</span>
+                    </button>
+                    <button
+                      onClick={() => setManualConnectOpen(true)}
+                      className="px-3 py-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-semibold transition"
+                    >
+                      Enter Handle
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 self-start md:self-auto">
-              {youtubeAccount ? (
-                <>
-                  <button
-                    onClick={handleSyncYouTube}
-                    disabled={isSyncing}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-[#E7E1DA] hover:bg-[#F8F6F2] text-xs font-bold text-[#171717] transition shadow-xs cursor-pointer disabled:opacity-60"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 text-[#FF6B00] ${isSyncing ? 'animate-spin' : ''}`} />
-                    <span>{isSyncing ? 'Checking YouTube...' : 'Check for New Uploads'}</span>
-                  </button>
-                  <button
-                    onClick={() => setManualConnectOpen(true)}
-                    className="px-3 py-2.5 rounded-xl border border-[#E7E1DA] hover:bg-[#F8F6F2] text-xs font-semibold text-neutral-600"
-                  >
-                    Switch Channel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={handleConnectYouTube}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-bold transition shadow-sm cursor-pointer"
-                  >
-                    <Youtube className="w-4 h-4" />
-                    <span>Connect YouTube Channel</span>
-                  </button>
-                  <button
-                    onClick={() => setManualConnectOpen(true)}
-                    className="px-3.5 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-semibold transition"
-                  >
-                    Enter Handle
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Quick preview of detected uploads */}
-          {youtubeAccount && recentVideos.length > 0 && (
-            <div className="pt-3 border-t border-[#E7E1DA]/80">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-bold text-[#737373] uppercase tracking-wider">
-                  Recent Channel Uploads ({recentVideos.length})
-                </span>
-                <span className="text-[11px] text-[#737373]">Ready for deliverable submission</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {recentVideos.slice(0, 3).map((video) => (
-                  <div
-                    key={video.id}
-                    className="flex items-center gap-3 p-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] hover:border-[#FF6B00]/40 transition group"
-                  >
-                    <div className="w-16 h-10 rounded-lg overflow-hidden bg-neutral-900 shrink-0 relative">
-                      <img
-                        src={video.thumbnailUrl || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`}
-                        alt={video.title}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Play className="w-3.5 h-3.5 text-white" />
+            {/* Quick preview of detected uploads */}
+            {youtubeAccount && recentVideos.length > 0 && (
+              <div className="pt-3 border-t border-[#E7E1DA]/80">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold text-[#737373] uppercase tracking-wider">
+                    Recent YouTube Uploads ({recentVideos.length})
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {recentVideos.slice(0, 2).map((video) => (
+                    <div
+                      key={video.id}
+                      className="flex items-center gap-2 p-2 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] text-left truncate"
+                    >
+                      <div className="w-12 h-8 rounded bg-neutral-900 shrink-0 overflow-hidden relative">
+                        <img
+                          src={video.thumbnailUrl || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`}
+                          alt={video.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-[11px] font-bold text-neutral-900 truncate">{video.title}</h4>
+                        <p className="text-[9px] text-neutral-500">{new Date(video.publishedAt).toLocaleDateString()}</p>
                       </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="text-xs font-bold text-neutral-900 truncate">{video.title}</h4>
-                      <p className="text-[10px] text-neutral-500 mt-0.5">
-                        {new Date(video.publishedAt).toLocaleDateString()}
-                      </p>
-                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* 2. Instagram Profile Integration */}
+          <section className="bg-white rounded-3xl p-6 border border-[#E7E1DA] shadow-xs space-y-4 flex flex-col justify-between">
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#fd5949] via-[#d6249f] to-[#285AEB] text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Instagram className="w-6 h-6 text-white" />
                   </div>
-                ))}
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-[#171717]">
+                        {instagramAccount ? `@${instagramAccount.username}` : 'Instagram Profile'}
+                      </h2>
+                      {instagramAccount ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-green-50 text-green-700 border border-green-200">
+                          CONNECTED
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-neutral-100 text-neutral-600 border border-neutral-200">
+                          NOT CONNECTED
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-[#737373] mt-1">
+                      {instagramAccount
+                        ? `@${instagramAccount.username} • ${(
+                            instagramAccount.stats?.followerCount || 0
+                          ).toLocaleString()} Followers • ${(instagramAccount.stats?.mediaCount || recentInstagramMedia.length).toLocaleString()} Posts`
+                        : 'Connect via Meta OAuth or Instagram handle to fulfill Post/Reel deliverables.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 mt-4">
+                {instagramAccount ? (
+                  <>
+                    <button
+                      onClick={handleSyncInstagram}
+                      disabled={isSyncingInstagram}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-[#E7E1DA] hover:bg-[#F8F6F2] text-xs font-bold text-[#171717] transition shadow-xs cursor-pointer disabled:opacity-60"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-[#FF6B00] ${isSyncingInstagram ? 'animate-spin' : ''}`} />
+                      <span>{isSyncingInstagram ? 'Checking...' : 'Sync Posts'}</span>
+                    </button>
+                    <button
+                      onClick={() => setManualInstagramModalOpen(true)}
+                      className="px-3 py-2 rounded-xl border border-[#E7E1DA] hover:bg-[#F8F6F2] text-xs font-semibold text-neutral-600"
+                    >
+                      Switch Profile
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleConnectInstagram}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                    >
+                      <Instagram className="w-4 h-4" />
+                      <span>Connect Instagram</span>
+                    </button>
+                    <button
+                      onClick={() => setManualInstagramModalOpen(true)}
+                      className="px-3 py-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-semibold transition"
+                    >
+                      Enter Handle
+                    </button>
+                  </>
+                )}
               </div>
             </div>
-          )}
-        </section>
+
+            {/* Quick preview of detected Instagram posts */}
+            {instagramAccount && recentInstagramMedia.length > 0 && (
+              <div className="pt-3 border-t border-[#E7E1DA]/80">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold text-[#737373] uppercase tracking-wider">
+                    Recent Instagram Media ({recentInstagramMedia.length})
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {recentInstagramMedia.slice(0, 2).map((media) => (
+                    <div
+                      key={media.id}
+                      className="flex items-center gap-2 p-2 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] text-left truncate"
+                    >
+                      <div className="w-12 h-8 rounded bg-neutral-900 shrink-0 overflow-hidden relative">
+                        {media.thumbnailUrl ? (
+                          <img
+                            src={media.thumbnailUrl}
+                            alt={media.caption || 'Instagram Post'}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-[#fd5949] to-[#d6249f] text-white text-[9px] font-bold">
+                            IG
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-[11px] font-bold text-neutral-900 truncate">
+                          {media.caption || 'Instagram Post'}
+                        </h4>
+                        <p className="text-[9px] text-neutral-500">
+                          {media.likeCount ? `${media.likeCount} likes` : new Date(media.publishedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
 
         {/* Filter Bar */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E7E1DA] shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
@@ -796,72 +1035,188 @@ export default function CreatorCollaborationsPage() {
             )}
 
             <div className="space-y-4">
-              {/* Option A: Select from real uploaded channel videos */}
-              {recentVideos.length > 0 ? (
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-neutral-800">
-                    Select from your detected YouTube uploads
-                  </label>
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {recentVideos.map((video) => (
-                      <div
-                        key={video.id}
-                        onClick={() => {
-                          setSelectedVideoId(video.id);
-                          setCustomVideoUrl('');
-                        }}
-                        className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-3 ${
-                          selectedVideoId === video.id
-                            ? 'border-[#FF6B00] bg-orange-50/50'
-                            : 'border-[#E7E1DA] bg-white hover:border-neutral-400'
-                        }`}
-                      >
-                        <div className="w-14 h-9 rounded bg-neutral-900 shrink-0 overflow-hidden">
-                          <img
-                            src={video.thumbnailUrl || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`}
-                            alt={video.title}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h5 className="text-xs font-bold text-neutral-900 truncate">{video.title}</h5>
-                          <span className="text-[10px] text-neutral-500">
-                            {new Date(video.publishedAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                        {selectedVideoId === video.id && (
-                          <CheckCircle2 className="w-4 h-4 text-[#FF6B00] shrink-0" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200 text-xs text-neutral-600">
-                  No uploads detected yet. You can paste your video link below.
+              {/* Deliverable Platform Selector if both platforms are connected */}
+              {(youtubeAccount || recentVideos.length > 0) && (instagramAccount || recentInstagramMedia.length > 0) && (
+                <div className="flex items-center gap-2 p-1 bg-neutral-100 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubmissionPlatform('YOUTUBE');
+                      setSelectedVideoId(recentVideos[0]?.id || '');
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                      submissionPlatform === 'YOUTUBE'
+                        ? 'bg-white text-neutral-900 shadow-xs'
+                        : 'text-neutral-500 hover:text-neutral-900'
+                    }`}
+                  >
+                    <Youtube className="w-3.5 h-3.5 text-red-600" />
+                    <span>YouTube Video</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubmissionPlatform('INSTAGRAM');
+                      setSelectedVideoId(recentInstagramMedia[0]?.id || '');
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                      submissionPlatform === 'INSTAGRAM'
+                        ? 'bg-white text-neutral-900 shadow-xs'
+                        : 'text-neutral-500 hover:text-neutral-900'
+                    }`}
+                  >
+                    <Instagram className="w-3.5 h-3.5 text-pink-600" />
+                    <span>Instagram Post / Reel</span>
+                  </button>
                 </div>
               )}
 
-              {/* Option B: Direct URL */}
-              <div className="space-y-1.5 pt-2 border-t border-[#E7E1DA]">
-                <label className="text-xs font-bold text-neutral-800 flex items-center justify-between">
-                  <span>Or enter direct YouTube Video URL</span>
-                  <span className="text-[10px] text-neutral-400">e.g. https://youtube.com/watch?v=...</span>
-                </label>
-                <div className="relative">
-                  <Link2 className="w-4 h-4 absolute left-3.5 top-3 text-neutral-400" />
-                  <input
-                    type="text"
-                    value={customVideoUrl}
-                    onChange={(e) => {
-                      setCustomVideoUrl(e.target.value);
-                      setSelectedVideoId('');
-                    }}
-                    placeholder="https://www.youtube.com/watch?v=your_video_id"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E7E1DA] text-xs focus:border-[#FF6B00] focus:outline-none"
-                  />
-                </div>
-              </div>
+              {submissionPlatform === 'YOUTUBE' ? (
+                <>
+                  {/* Option A: Select from real uploaded YouTube videos */}
+                  {recentVideos.length > 0 ? (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-neutral-800">
+                        Select from your detected YouTube uploads
+                      </label>
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {recentVideos.map((video) => (
+                          <div
+                            key={video.id}
+                            onClick={() => {
+                              setSelectedVideoId(video.id);
+                              setCustomVideoUrl('');
+                            }}
+                            className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-3 ${
+                              selectedVideoId === video.id
+                                ? 'border-[#FF6B00] bg-orange-50/50'
+                                : 'border-[#E7E1DA] bg-white hover:border-neutral-400'
+                            }`}
+                          >
+                            <div className="w-14 h-9 rounded bg-neutral-900 shrink-0 overflow-hidden">
+                              <img
+                                src={video.thumbnailUrl || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`}
+                                alt={video.title}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h5 className="text-xs font-bold text-neutral-900 truncate">{video.title}</h5>
+                              <span className="text-[10px] text-neutral-500">
+                                {new Date(video.publishedAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                            {selectedVideoId === video.id && (
+                              <CheckCircle2 className="w-4 h-4 text-[#FF6B00] shrink-0" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200 text-xs text-neutral-600">
+                      No YouTube uploads detected yet. You can paste your video link below.
+                    </div>
+                  )}
+
+                  {/* Option B: Direct URL */}
+                  <div className="space-y-1.5 pt-2 border-t border-[#E7E1DA]">
+                    <label className="text-xs font-bold text-neutral-800 flex items-center justify-between">
+                      <span>Or enter direct YouTube Video URL</span>
+                      <span className="text-[10px] text-neutral-400">e.g. https://youtube.com/watch?v=...</span>
+                    </label>
+                    <div className="relative">
+                      <Link2 className="w-4 h-4 absolute left-3.5 top-3 text-neutral-400" />
+                      <input
+                        type="text"
+                        value={customVideoUrl}
+                        onChange={(e) => {
+                          setCustomVideoUrl(e.target.value);
+                          setSelectedVideoId('');
+                        }}
+                        placeholder="https://www.youtube.com/watch?v=your_video_id"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E7E1DA] text-xs focus:border-[#FF6B00] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Instagram media selection */}
+                  {recentInstagramMedia.length > 0 ? (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-neutral-800">
+                        Select from your detected Instagram Posts & Reels
+                      </label>
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {recentInstagramMedia.map((media) => (
+                          <div
+                            key={media.id}
+                            onClick={() => {
+                              setSelectedVideoId(media.id);
+                              setCustomVideoUrl(media.permalink || '');
+                            }}
+                            className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-3 ${
+                              selectedVideoId === media.id
+                                ? 'border-[#FF6B00] bg-orange-50/50'
+                                : 'border-[#E7E1DA] bg-white hover:border-neutral-400'
+                            }`}
+                          >
+                            <div className="w-12 h-12 rounded bg-neutral-900 shrink-0 overflow-hidden flex items-center justify-center text-white">
+                              {media.thumbnailUrl ? (
+                                <img
+                                  src={media.thumbnailUrl}
+                                  alt={media.caption || 'Instagram'}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <Instagram className="w-5 h-5 text-white" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h5 className="text-xs font-bold text-neutral-900 truncate">
+                                {media.caption || 'Instagram Media'}
+                              </h5>
+                              <span className="text-[10px] text-neutral-500">
+                                {media.likeCount ? `${media.likeCount} likes • ` : ''}
+                                {new Date(media.publishedAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                            {selectedVideoId === media.id && (
+                              <CheckCircle2 className="w-4 h-4 text-[#FF6B00] shrink-0" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200 text-xs text-neutral-600">
+                      No Instagram posts detected yet. You can paste your post/reel permalink below.
+                    </div>
+                  )}
+
+                  {/* Direct Instagram permalink */}
+                  <div className="space-y-1.5 pt-2 border-t border-[#E7E1DA]">
+                    <label className="text-xs font-bold text-neutral-800 flex items-center justify-between">
+                      <span>Or enter direct Instagram Post/Reel URL</span>
+                      <span className="text-[10px] text-neutral-400">e.g. https://instagram.com/p/...</span>
+                    </label>
+                    <div className="relative">
+                      <Link2 className="w-4 h-4 absolute left-3.5 top-3 text-neutral-400" />
+                      <input
+                        type="text"
+                        value={customVideoUrl}
+                        onChange={(e) => {
+                          setCustomVideoUrl(e.target.value);
+                          setSelectedVideoId('');
+                        }}
+                        placeholder="https://www.instagram.com/p/your_post_code/"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E7E1DA] text-xs focus:border-[#FF6B00] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="pt-2 flex items-center justify-end gap-3">
@@ -947,6 +1302,74 @@ export default function CreatorCollaborationsPage() {
                 className="px-5 py-2.5 rounded-xl bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-bold transition shadow-xs disabled:opacity-60 cursor-pointer"
               >
                 {connectingManual ? 'Connecting...' : 'Connect & Import Channel'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Manual Instagram Connect Modal */}
+      {manualInstagramModalOpen && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setManualInstagramModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <form
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={handleManualInstagramSubmit}
+            className="bg-white rounded-3xl border border-[#E7E1DA] max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95"
+          >
+            <div className="flex items-start justify-between border-b border-[#E7E1DA] pb-3">
+              <div>
+                <span className="text-[11px] font-bold text-[#FF6B00] uppercase tracking-wider">
+                  Instagram Setup
+                </span>
+                <h3 className="text-lg font-bold text-neutral-900 mt-0.5">
+                  Link Instagram Profile
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManualInstagramModalOpen(false)}
+                className="text-neutral-400 hover:text-neutral-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-neutral-800">
+                Instagram Handle or Profile URL
+              </label>
+              <input
+                type="text"
+                required
+                value={manualInstagramHandle}
+                onChange={(e) => setManualInstagramHandle(e.target.value)}
+                placeholder="@yourusername or instagram.com/username"
+                className="w-full px-4 py-2.5 rounded-xl border border-[#E7E1DA] text-sm focus:border-[#FF6B00] focus:outline-none"
+              />
+              <p className="text-[11px] text-neutral-500">
+                CRAB will fetch your public Instagram metrics and sync recent posts for campaign deliverable matching.
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setManualInstagramModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-[#E7E1DA] text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={connectingManualInstagram || !manualInstagramHandle.trim()}
+                className="px-5 py-2.5 rounded-xl bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-bold transition shadow-xs disabled:opacity-60 cursor-pointer"
+              >
+                {connectingManualInstagram ? 'Connecting...' : 'Connect & Import Profile'}
               </button>
             </div>
           </form>

@@ -25,8 +25,8 @@ export const config = {
   },
   social: {
     youtubeApiKey: process.env.YOUTUBE_API_KEY || '',
-    instagramAppId: process.env.INSTAGRAM_APP_ID || '',
-    instagramAppSecret: process.env.INSTAGRAM_APP_SECRET || '',
+    instagramAppId: process.env.INSTAGRAM_APP_ID || process.env.META_APP_ID || '',
+    instagramAppSecret: process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET || '',
   },
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID || '',
@@ -36,6 +36,13 @@ export const config = {
   youtube: {
     apiKey: process.env.YOUTUBE_API_KEY || '',
     webhookSecret: process.env.YOUTUBE_WEBHOOK_SECRET || '',
+  },
+  instagram: {
+    appId: process.env.INSTAGRAM_APP_ID || process.env.META_APP_ID || '',
+    appSecret: process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET || '',
+    redirectUri:
+      process.env.INSTAGRAM_REDIRECT_URI ||
+      'http://localhost:5000/api/social/instagram/callback',
   },
   isDevelopment: (process.env.NODE_ENV || 'development') === 'development',
 };

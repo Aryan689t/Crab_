@@ -7,6 +7,7 @@ import {
 import { getComprehensiveCreatorIntelligence } from '../services/intelligenceWorkspaceService.js';
 import { GeminiServiceError } from '../integrations/gemini/index.js';
 import { syncCreatorYouTube } from '../integrations/youtube/index.js';
+import { syncCreatorInstagram } from '../integrations/instagram/index.js';
 
 export async function getCreatorIntelligence(
   req: Request,
@@ -88,6 +89,17 @@ export async function analyzeCreatorIntelligence(
         await syncCreatorYouTube(creator.id, channelInput);
       } catch (syncErr: any) {
         console.warn('[CREATOR_INTELLIGENCE] YouTube sync note during refresh:', syncErr.message);
+      }
+    }
+
+    // 1b. If an Instagram profile exists, synchronize latest posts and metrics
+    const igAccount = creator.socialAccounts.find((a) => a.platform === 'INSTAGRAM');
+    const igInput = igAccount?.username || prefs.instagramUrl;
+    if (igInput) {
+      try {
+        await syncCreatorInstagram(creator.id, igInput);
+      } catch (igSyncErr: any) {
+        console.warn('[CREATOR_INTELLIGENCE] Instagram sync note during refresh:', igSyncErr.message);
       }
     }
 
