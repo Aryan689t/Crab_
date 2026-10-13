@@ -30,7 +30,7 @@ export function CreatorSidebar({ isOpen, setIsOpen }: CreatorSidebarProps) {
     { label: 'Discover', href: '/creator/discover', icon: Search },
     { label: 'Opportunities', href: '/creator/opportunities', icon: Mail, badge: '8' },
     { label: 'Collaborations', href: '/creator/collaborations', icon: Users },
-    { label: 'Inbox', href: '/creator/inbox', icon: MessageSquare, badge: '3' },
+    { label: 'Inbox', href: '/creator/inbox', icon: MessageSquare },
     { label: 'Intelligence', href: '/creator/intelligence', icon: Sparkles },
   ];
 

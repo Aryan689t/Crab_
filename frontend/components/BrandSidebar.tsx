@@ -33,7 +33,7 @@ export function BrandSidebar({ isOpen, setIsOpen }: BrandSidebarProps) {
     { label: 'Find Creators', href: '/brand/creators', icon: Search },
     { label: 'Applications', href: '/brand/applications', icon: FileText, badge: '5' },
     { label: 'Collaborations', href: '/brand/collaborations', icon: Users },
-    { label: 'Inbox', href: '/brand/inbox', icon: MessageSquare, badge: '2' },
+    { label: 'Inbox', href: '/brand/inbox', icon: MessageSquare },
     { label: 'Intelligence', href: '/brand/intelligence', icon: Sparkles },
   ];
 
