@@ -2,7 +2,7 @@
 
   <img src="./frontend/public/crab-logo.png" alt="CRAB Logo" width="120" style="border-radius: 24px;" />
 
-  # 🦀 CRAB — Creator–Brand Alignment Bridge
+  # 🦀 CRAB — Creators Reaching Alligned Brands
   ### *The AI-Powered Opportunity Engine Connecting Creators & Brands Through Contextual Intelligence & Real Social Graph Analytics*
 
   <p align="center">
