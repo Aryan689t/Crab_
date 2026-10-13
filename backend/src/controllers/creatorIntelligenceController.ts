@@ -6,6 +6,7 @@ import {
 } from '../services/creatorIntelligenceService.js';
 import { getComprehensiveCreatorIntelligence } from '../services/intelligenceWorkspaceService.js';
 import { GeminiServiceError } from '../integrations/gemini/index.js';
+import { syncCreatorYouTube } from '../integrations/youtube/index.js';
 
 export async function getCreatorIntelligence(
   req: Request,
@@ -56,21 +57,68 @@ export async function analyzeCreatorIntelligence(
       return;
     }
 
-    if (!process.env.GEMINI_API_KEY?.trim()) {
-      res.status(503).json({
-        error: 'Gemini is not configured on the server.',
+    const creator = await prisma.creator.findFirst({
+      where: {
+        OR: [
+          { userId },
+          ...(userEmail ? [{ user: { email: userEmail } }] : []),
+        ],
+      },
+      include: {
+        socialAccounts: true,
+      },
+    });
+
+    if (!creator) {
+      res.status(404).json({
+        error: 'Creator profile not found.',
       });
       return;
     }
 
-    // Strictly scope analysis to the authenticated user identity (never an untrusted client ID).
-    const profile = await analyzeAndSaveCreatorIntelligence(userId || '', userEmail);
+    // 1. If an authorized YouTube channel exists, synchronize latest videos and metrics
+    const ytAccount = creator.socialAccounts.find(
+      (a) => a.platform === 'YOUTUBE' && a.status === 'CONNECTED'
+    );
+    if (ytAccount) {
+      try {
+        await syncCreatorYouTube(creator.id);
+      } catch (syncErr: any) {
+        console.warn('[CREATOR_INTELLIGENCE] YouTube sync note during refresh:', syncErr.message);
+      }
+    }
+
+    // 2. Run Gemini AI analysis if configured and data is available
+    let aiStatus = 'SKIPPED';
+    let aiMessage = 'AI analysis skipped (no Gemini API key configured).';
+    if (process.env.GEMINI_API_KEY?.trim()) {
+      try {
+        await analyzeAndSaveCreatorIntelligence(userId || '', userEmail);
+        aiStatus = 'COMPLETED';
+        aiMessage = 'Creator intelligence generated and saved successfully.';
+      } catch (err) {
+        if (err instanceof Error && err.message === 'INSUFFICIENT_CREATOR_DATA') {
+          aiStatus = 'INSUFFICIENT_DATA';
+          aiMessage = 'Connect a channel or add a bio to unlock deeper AI Content DNA analysis.';
+        } else if (err instanceof GeminiServiceError) {
+          aiStatus = 'AI_UNAVAILABLE';
+          aiMessage = err.message;
+        } else {
+          console.warn('[CREATOR_INTELLIGENCE] Gemini analysis notice:', err);
+          aiStatus = 'ERROR';
+          aiMessage = 'AI analysis could not complete. Synced data is preserved.';
+        }
+      }
+    }
+
+    // 3. Return the fresh comprehensive snapshot
+    const snapshot = await getComprehensiveCreatorIntelligence(userId || '', userEmail);
 
     res.status(200).json({
-      data: {
-        status: 'COMPLETED',
-        message: 'Creator intelligence generated and saved successfully.',
-        profile,
+      data: snapshot,
+      meta: {
+        status: aiStatus,
+        message: aiMessage,
       },
     });
   } catch (err) {

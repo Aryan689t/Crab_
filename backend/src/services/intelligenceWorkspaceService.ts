@@ -13,18 +13,19 @@ export interface CreatorIntelligenceFullSnapshot {
   connectedAccounts: Array<{
     platform: string;
     username: string;
-    followers: number;
+    followers: number | null;
     status: string;
+    isPublicLinkOnly?: boolean;
   }>;
   analysisCoverage: {
     youtubeVideosCount: number;
     instagramPostsCount: number;
     recentCommentsCount: number;
     channelMetadataVerified: boolean;
-    lastAnalyzed: string;
+    lastAnalyzed: string | null;
   };
   contentDna: {
-    topTopics: Array<{ name: string; percentage: number }>;
+    topTopics: Array<{ name: string; percentage: number; count?: number }>;
     formatBreakdown: Array<{ format: string; percentage: number }>;
     contentStyle: string[];
   };
@@ -33,24 +34,26 @@ export interface CreatorIntelligenceFullSnapshot {
     title: string;
     thumbnailUrl: string;
     platform: string;
-    duration: string;
-    views: number;
-    likes: number;
+    duration: string | null;
+    views: number | null;
+    likes: number | null;
     tags: string[];
     permalink: string;
-    publishedAt: string;
+    publishedAt: string | null;
   }>;
   performance: {
     timeRange: string;
-    averageViews: { value: number; changePct: number; history: number[] };
-    engagementRate: { value: number; changePct: number; history: number[] };
-    subscribers: { value: number; changePct: number; history: number[] };
+    averageViews: { value: number | null; changePct: number | null; history: number[] };
+    engagementRate: { value: number | null; changePct: number | null; history: number[] };
+    subscribers: { value: number | null; changePct: number | null; history: number[] };
     keyTakeaways: string[];
   };
   audienceInsights: {
+    hasDemographics: boolean;
     demographics: Array<{ ageGroup: string; percentage: number }>;
     topInterests: string[];
     topLocations: Array<{ country: string; percentage: number }>;
+    notice?: string;
   };
   brandOpportunities: Array<{
     id: string;
@@ -75,6 +78,7 @@ export interface CreatorIntelligenceFullSnapshot {
 
 /**
  * Compiles a deep, evidence-grounded Creator Intelligence Snapshot for the authenticated creator.
+ * Never fabricates numbers, follower counts, sample videos, or demographic brackets.
  */
 export async function getComprehensiveCreatorIntelligence(
   userId: string,
@@ -88,6 +92,7 @@ export async function getComprehensiveCreatorIntelligence(
       ],
     },
     include: {
+      user: true,
       socialAccounts: {
         include: {
           metricSnapshots: {
@@ -102,7 +107,7 @@ export async function getComprehensiveCreatorIntelligence(
       },
       contents: {
         orderBy: { publishedAt: 'desc' },
-        take: 30,
+        take: 50,
         include: {
           aiAnalysis: true,
         },
@@ -119,65 +124,44 @@ export async function getComprehensiveCreatorIntelligence(
   const contents = creator.contents || [];
   const aiProfile = creator.aiProfile;
 
-  // 1. Niches & Styles
-  const primaryNiches = aiProfile?.primaryNiches?.length
-    ? aiProfile.primaryNiches
-    : ['Tech Education', 'Software Development', 'AI Tools'];
+  // 1. Niches & Styles (Only from real AI Profile or creator preferences)
+  const primaryNiches = aiProfile?.primaryNiches || [];
+  const secondaryNiches = aiProfile?.secondaryNiches || [];
+  const contentStyles = aiProfile?.contentStyle || [];
 
-  const secondaryNiches = aiProfile?.secondaryNiches?.length
-    ? aiProfile.secondaryNiches
-    : ['Cloud & DevOps', 'Web Architecture'];
-
-  const contentStyles = aiProfile?.contentStyle?.length
-    ? aiProfile.contentStyle
-    : [
-        'Technical & Practical',
-        'Step-by-step Explanations',
-        'Clean Editing',
-        'On-screen Demos',
-        'Beginner Friendly',
-      ];
-
-  // 2. Connected accounts
-  const connectedAccounts: Array<{
-    platform: string;
-    username: string;
-    followers: number;
-    status: string;
-  }> = accounts.map((acc) => {
-    const latestSnapshot = acc.metricSnapshots?.[0];
-    let followers = latestSnapshot?.followers || 0;
-    if (!followers) {
-      if (acc.platform === 'YOUTUBE') followers = 124500;
-      else if (acc.platform === 'INSTAGRAM') followers = 48600;
-      else followers = 28400;
+  // 2. Connected accounts (Strictly based on creator's actual records)
+  const connectedAccounts = accounts.map((acc) => {
+    let refData: any = {};
+    try {
+      refData = acc.authorizationReference ? JSON.parse(acc.authorizationReference) : {};
+    } catch {
+      refData = {};
     }
+
+    const latestSnapshot = acc.metricSnapshots?.[0];
+    const rawFollowers = latestSnapshot?.followers ?? refData.subscriberCount ?? null;
+    const isPublicLinkOnly = Boolean(refData.isPublicLinkOnly);
+
     return {
       platform: acc.platform,
       username: acc.username.startsWith('@') ? acc.username : `@${acc.username}`,
-      followers,
-      status: acc.status || 'CONNECTED',
+      followers: rawFollowers,
+      status: isPublicLinkOnly ? 'LINKED' : (acc.status || 'CONNECTED'),
+      isPublicLinkOnly,
     };
   });
 
-  if (connectedAccounts.length === 0) {
-    connectedAccounts.push(
-      { platform: 'YOUTUBE', username: '@alexchen_tech', followers: 124500, status: 'CONNECTED' },
-      { platform: 'INSTAGRAM', username: '@alexchen.dev', followers: 48600, status: 'CONNECTED' },
-      { platform: 'TIKTOK' as string, username: '@alexchen_code', followers: 28400, status: 'CONNECTED' },
-      { platform: 'TWITTER' as string, username: '@alexchen_dev', followers: 12300, status: 'CONNECTED' }
-    );
-  }
-
-  // 3. Analysis Coverage
-  const ytCount = contents.filter((c) => c.platform === 'YOUTUBE').length;
-  const igCount = contents.filter((c) => c.platform === 'INSTAGRAM').length;
+  // 3. Analysis Coverage (Calculated strictly from DB)
+  const ytVideos = contents.filter((c) => c.platform === 'YOUTUBE');
+  const igPosts = contents.filter((c) => c.platform === 'INSTAGRAM');
+  const totalComments = contents.reduce((acc, c) => acc + (c.comments || 0), 0);
+  const hasYtAccount = accounts.some((a) => a.platform === 'YOUTUBE' && a.status === 'CONNECTED');
 
   const analysisCoverage = {
-    youtubeVideosCount: ytCount > 0 ? ytCount * 8 + 32 : 142,
-    instagramPostsCount: igCount > 0 ? igCount * 12 + 45 : 312,
-    recentCommentsCount: 500,
-    channelMetadataVerified: true,
+    youtubeVideosCount: ytVideos.length,
+    instagramPostsCount: igPosts.length,
+    recentCommentsCount: totalComments,
+    channelMetadataVerified: hasYtAccount,
     lastAnalyzed: aiProfile?.generatedAt
       ? aiProfile.generatedAt.toLocaleDateString('en-US', {
           month: 'short',
@@ -186,161 +170,207 @@ export async function getComprehensiveCreatorIntelligence(
           hour: '2-digit',
           minute: '2-digit',
         })
-      : 'Oct 13, 2026, 01:32 AM',
+      : null,
   };
 
-  // 4. Content DNA
-  const topTopics = [
-    { name: 'Developer Tutorials', percentage: 32 },
-    { name: 'AI Tools & LLMs', percentage: 24 },
-    { name: 'Cloud & DevOps', percentage: 18 },
-    { name: 'Productivity & Setup', percentage: 14 },
-    { name: 'Career & Tech Advice', percentage: 8 },
-    { name: 'Other', percentage: 4 },
-  ];
+  // 4. Content DNA (Aggregated from real content aiAnalysis or AI profile niches)
+  const topicCounts: Record<string, number> = {};
+  let totalTopicOccurrences = 0;
 
-  const formatBreakdown = [
-    { format: 'Long-form Tutorials', percentage: 42 },
-    { format: 'Short Tutorials', percentage: 26 },
-    { format: 'Tool Reviews', percentage: 16 },
-    { format: 'Explainers', percentage: 10 },
-    { format: 'Q&A / Commentary', percentage: 4 },
-  ];
+  contents.forEach((c) => {
+    if (c.aiAnalysis?.topics && Array.isArray(c.aiAnalysis.topics)) {
+      c.aiAnalysis.topics.forEach((t) => {
+        const cleaned = t.trim();
+        if (cleaned) {
+          topicCounts[cleaned] = (topicCounts[cleaned] || 0) + 1;
+          totalTopicOccurrences++;
+        }
+      });
+    }
+  });
 
-  // 5. Top Performing Content
-  const sampleVideos = [
-    {
-      id: 'top_1',
-      title: 'Build a Fullstack App with Next.js 14',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600&auto=format&fit=crop',
-      platform: 'YOUTUBE',
-      duration: '12:34',
-      views: 2100000,
-      likes: 76400,
-      tags: ['Next.js', 'Web Development'],
-      permalink: 'https://youtube.com',
-      publishedAt: '2026-08-15',
-    },
-    {
-      id: 'top_2',
-      title: 'My Developer Setup (2025)',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop',
-      platform: 'YOUTUBE',
-      duration: '10:21',
-      views: 980000,
-      likes: 42100,
-      tags: ['Productivity', 'Setup'],
-      permalink: 'https://youtube.com',
-      publishedAt: '2026-09-02',
-    },
-    {
-      id: 'top_3',
-      title: 'AI Tools I Actually Use',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop',
-      platform: 'YOUTUBE',
-      duration: '8:17',
-      views: 620000,
-      likes: 28700,
-      tags: ['AI Tools', 'Workflow'],
-      permalink: 'https://youtube.com',
-      publishedAt: '2026-09-18',
-    },
-    {
-      id: 'top_4',
-      title: 'How I Learned System Design',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop',
-      platform: 'YOUTUBE',
-      duration: '14:02',
-      views: 410000,
-      likes: 18200,
-      tags: ['System Design', 'Career'],
-      permalink: 'https://youtube.com',
-      publishedAt: '2026-10-01',
-    },
-  ];
+  // If content items don't have individual topic analyses yet, fall back to AI Profile primary niches
+  if (totalTopicOccurrences === 0 && primaryNiches.length > 0) {
+    const allNiches = [...primaryNiches, ...secondaryNiches];
+    allNiches.forEach((n) => {
+      topicCounts[n] = 1;
+      totalTopicOccurrences++;
+    });
+  }
 
-  const topContent = contents.length >= 4
-    ? contents.slice(0, 4).map((c, i) => ({
+  const topTopics = Object.entries(topicCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([name, count]) => ({
+      name,
+      percentage: totalTopicOccurrences > 0 ? Math.round((count / totalTopicOccurrences) * 100) : 0,
+      count,
+    }));
+
+  // Content Formats from real contents
+  const formatCounts: Record<string, number> = {};
+  let totalFormats = 0;
+  contents.forEach((c) => {
+    let fmt = c.contentType || (c.platform === 'YOUTUBE' ? 'Video' : 'Post');
+    const upper = fmt.toUpperCase();
+    if (upper === 'VIDEO') fmt = 'Long-form Video';
+    else if (upper === 'SHORT' || upper === 'REEL') fmt = 'Shorts / Reels';
+    else if (upper === 'POST' || upper === 'IMAGE') fmt = 'Image Post';
+    else if (upper === 'CAROUSEL') fmt = 'Carousel';
+    formatCounts[fmt] = (formatCounts[fmt] || 0) + 1;
+    totalFormats++;
+  });
+
+  const formatBreakdown = Object.entries(formatCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([format, count]) => ({
+      format,
+      percentage: totalFormats > 0 ? Math.round((count / totalFormats) * 100) : 0,
+    }));
+
+  // 5. Top Performing Content (Strictly real content belonging to this creator)
+  const topContent = contents
+    .filter((c) => c.title || c.permalink)
+    .sort((a, b) => {
+      const vB = b.views !== null ? Number(b.views) : 0;
+      const vA = a.views !== null ? Number(a.views) : 0;
+      return vB - vA;
+    })
+    .slice(0, 4)
+    .map((c) => {
+      let thumb = '';
+      if (c.platform === 'YOUTUBE' && c.platformContentId) {
+        thumb = `https://i.ytimg.com/vi/${c.platformContentId}/hqdefault.jpg`;
+      }
+      return {
         id: c.id,
-        title: c.title || sampleVideos[i]?.title || 'Video Tutorial',
-        thumbnailUrl: sampleVideos[i]?.thumbnailUrl || 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600&auto=format&fit=crop',
+        title: c.title || (c.platform === 'YOUTUBE' ? 'YouTube Video' : 'Instagram Post'),
+        thumbnailUrl: thumb,
         platform: c.platform,
-        duration: sampleVideos[i]?.duration || '10:00',
-        views: Number(c.views) || sampleVideos[i]?.views || 45000,
-        likes: c.likes || sampleVideos[i]?.likes || 3200,
-        tags: c.aiAnalysis?.topics?.slice(0, 2) || sampleVideos[i]?.tags || ['Technology'],
-        permalink: c.permalink || sampleVideos[i]?.permalink || 'https://youtube.com',
-        publishedAt: c.publishedAt ? c.publishedAt.toISOString().slice(0, 10) : sampleVideos[i]?.publishedAt || '2026-10-01',
-      }))
-    : sampleVideos;
+        duration: null,
+        views: c.views !== null ? Number(c.views) : null,
+        likes: c.likes ?? null,
+        tags: c.aiAnalysis?.topics?.slice(0, 2) || (c.platform === 'YOUTUBE' ? ['Video'] : ['Post']),
+        permalink: c.permalink || (c.platform === 'YOUTUBE' ? `https://www.youtube.com/watch?v=${c.platformContentId}` : '#'),
+        publishedAt: c.publishedAt ? c.publishedAt.toISOString().slice(0, 10) : null,
+      };
+    });
 
-  // 6. Performance
-  const latestSnapshot = creator.metricSnapshots?.[0];
-  const averageViewsValue = latestSnapshot?.averageViews || 48200;
-  const engagementRateValue = latestSnapshot?.engagementRate || 5.6;
-  const subscribersValue = latestSnapshot?.followers || 124500;
+  // 6. Performance Metrics (Calculated from real data)
+  const viewNumbers = contents
+    .map((c) => (c.views !== null ? Number(c.views) : null))
+    .filter((v): v is number => v !== null);
+
+  const avgViews = viewNumbers.length > 0
+    ? Math.round(viewNumbers.reduce((a, b) => a + b, 0) / viewNumbers.length)
+    : (creator.metricSnapshots?.[0]?.averageViews ?? null);
+
+  let engRate: number | null = null;
+  const rates = contents
+    .map((c) => {
+      const v = c.views !== null ? Number(c.views) : 0;
+      const l = c.likes ?? 0;
+      const com = c.comments ?? 0;
+      return v > 0 ? ((l + com) / v) * 100 : null;
+    })
+    .filter((r): r is number => r !== null);
+
+  if (rates.length > 0) {
+    engRate = Number((rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(1));
+  } else if (creator.metricSnapshots?.[0]?.engagementRate !== null && creator.metricSnapshots?.[0]?.engagementRate !== undefined) {
+    engRate = creator.metricSnapshots[0].engagementRate;
+  }
+
+  // Total subscribers across accounts
+  let totalSubs: number | null = null;
+  accounts.forEach((acc) => {
+    let refData: any = {};
+    try {
+      refData = acc.authorizationReference ? JSON.parse(acc.authorizationReference) : {};
+    } catch {
+      refData = {};
+    }
+    const subs = acc.metricSnapshots?.[0]?.followers ?? refData.subscriberCount ?? null;
+    if (subs !== null) {
+      totalSubs = (totalSubs || 0) + subs;
+    }
+  });
+
+  if (totalSubs === null && creator.metricSnapshots?.[0]?.followers) {
+    totalSubs = creator.metricSnapshots[0].followers;
+  }
+
+  // History sparklines: Only populated if genuine historical snapshots exist in DB
+  const rawSnapshots = creator.metricSnapshots || [];
+  const hasHistory = rawSnapshots.length >= 2;
+  const viewHistory = hasHistory ? rawSnapshots.slice(0, 6).reverse().map((s) => s.averageViews || 0).filter((v) => v > 0) : [];
+  const engHistory = hasHistory ? rawSnapshots.slice(0, 6).reverse().map((s) => s.engagementRate || 0).filter((v) => v > 0) : [];
+  const subHistory = hasHistory ? rawSnapshots.slice(0, 6).reverse().map((s) => s.followers || 0).filter((v) => v > 0) : [];
+
+  const keyTakeaways: string[] = [];
+  if (contents.length > 0) {
+    keyTakeaways.push(`Analyzed ${contents.length} published item${contents.length > 1 ? 's' : ''} across your connected social channels.`);
+    if (avgViews !== null && avgViews > 0) {
+      keyTakeaways.push(`Average view velocity is ${avgViews.toLocaleString()} views per post.`);
+    }
+    if (engRate !== null && engRate > 0) {
+      keyTakeaways.push(`Observed audience interaction rate is approximately ${engRate}% across accessible posts.`);
+    }
+  } else {
+    keyTakeaways.push('CRAB is currently establishing your performance baseline.');
+    keyTakeaways.push('Connect your active social channels and sync your recent uploads to generate evidence-based takeaways.');
+  }
 
   const performance = {
     timeRange: 'Last 90 days',
     averageViews: {
-      value: averageViewsValue,
-      changePct: 8.7,
-      history: [38000, 41200, 39500, 44000, 46100, 48200],
+      value: avgViews,
+      changePct: null,
+      history: viewHistory,
     },
     engagementRate: {
-      value: engagementRateValue,
-      changePct: 1.2,
-      history: [4.9, 5.1, 5.0, 5.3, 5.4, 5.6],
+      value: engRate,
+      changePct: null,
+      history: engHistory,
     },
     subscribers: {
-      value: subscribersValue,
-      changePct: 12.4,
-      history: [110000, 113000, 116500, 119000, 122000, 124500],
+      value: totalSubs,
+      changePct: null,
+      history: subHistory,
     },
-    keyTakeaways: [
-      'Long-form tutorials consistently outperform short-form clips in viewer retention and watch time.',
-      'Your audience is highly engaged on developer tooling and practical workflow content.',
-      'Recent content shows a +12.4% subscriber growth trend compared to your previous 90 days.',
-    ],
+    keyTakeaways,
   };
 
-  // 7. Audience Insights
+  // 7. Audience Insights (Strictly authentic - never fabricate private demographics)
   const audienceInsights = {
-    demographics: [
-      { ageGroup: '18-24', percentage: 42 },
-      { ageGroup: '25-34', percentage: 38 },
-      { ageGroup: '35-44', percentage: 16 },
-      { ageGroup: '45+', percentage: 6 },
-    ],
-    topInterests: [
-      'Software Engineering',
-      'AI Tools',
-      'Cloud Computing',
-      'Productivity',
-      'Startups',
-    ],
-    topLocations: [
-      { country: 'India', percentage: 48 },
-      { country: 'United States', percentage: 24 },
-      { country: 'United Kingdom', percentage: 9 },
-      { country: 'Germany', percentage: 6 },
-    ],
+    hasDemographics: false,
+    demographics: [],
+    topInterests: aiProfile?.audienceInterests || [],
+    topLocations: [],
+    notice: 'Private demographic data (age, gender, geography) requires owner-authorized platform analytics permissions. CRAB does not generate artificial audience distributions.',
   };
 
-  // 8. Relevant Brand Opportunities
+  // 8. Relevant Brand Opportunities (From real active database campaigns)
   const activeCampaigns = await prisma.campaign.findMany({
     where: { status: 'ACTIVE' },
     include: { brand: true },
     take: 5,
   });
 
-  const brandOpportunities = activeCampaigns.map((camp, idx) => {
-    const minBudget = Number(camp.budgetMin) || 25000;
-    const maxBudget = Number(camp.budgetMax) || 50000;
-    const matchScore = idx === 0 ? 92 : idx === 1 ? 88 : 84;
-    const niches = camp.creatorNiche
-      ? camp.creatorNiche.split(',').map((n) => n.trim())
-      : ['Developer Tools', 'Tech Education'];
+  const creatorNichesLower = (aiProfile?.primaryNiches || []).map((n) => n.toLowerCase());
+
+  const brandOpportunities = activeCampaigns.map((camp) => {
+    const minBudget = Number(camp.budgetMin) || 0;
+    const maxBudget = Number(camp.budgetMax) || 0;
+    const niches = camp.creatorNiche ? camp.creatorNiche.split(',').map((n) => n.trim()) : [];
+
+    let matchScore = 75;
+    if (niches.length > 0 && creatorNichesLower.length > 0) {
+      const hasMatch = niches.some((n) =>
+        creatorNichesLower.some((cn) => cn.includes(n.toLowerCase()) || n.toLowerCase().includes(cn))
+      );
+      if (hasMatch) matchScore = 92;
+    }
 
     return {
       id: `opp_${camp.id}`,
@@ -355,73 +385,70 @@ export async function getComprehensiveCreatorIntelligence(
     };
   });
 
-  if (brandOpportunities.length === 0) {
-    brandOpportunities.push(
-      {
-        id: 'opp_demo_1',
-        campaignId: 'cmp_notion_01',
-        brandName: 'Notion',
-        title: 'Creator Education Campaign',
-        budgetMin: 25000,
-        budgetMax: 50000,
-        matchScore: 92,
-        tags: ['Productivity', 'Developer Tools'],
-        status: 'MATCHED',
-      },
-      {
-        id: 'opp_demo_2',
-        campaignId: 'cmp_aws_01',
-        brandName: 'AWS',
-        title: 'Developer Cloud Stories',
-        budgetMin: 40000,
-        budgetMax: 80000,
-        matchScore: 88,
-        tags: ['Cloud Computing', 'Tech Education'],
-        status: 'MATCHED',
-      }
-    );
+  // 9. Next Actions (Contextually derived from real creator profile state)
+  const nextActions: Array<{ id: number; title: string; description: string; actionLabel: string; actionHref: string }> = [];
+  let actionCounter = 1;
+
+  if (accounts.length === 0) {
+    nextActions.push({
+      id: actionCounter++,
+      title: 'Connect your social accounts',
+      description: 'Link your authorized YouTube channel or Instagram to import authentic performance metrics and videos.',
+      actionLabel: 'Connect Accounts',
+      actionHref: '/creator/settings',
+    });
   }
 
-  // 9. Next Actions
-  const nextActions = [
-    {
-      id: 1,
-      title: 'Publish 2-4 more tutorial videos',
-      description: 'Your audience engages most with in-depth tutorials. Aim for consistent uploads.',
-      actionLabel: 'View Content Calendar',
-      actionHref: '/creator/dashboard',
-    },
-    {
-      id: 2,
-      title: 'Update your profile and niche details',
-      description: 'Helps brands find and match you with relevant campaigns and higher budgets.',
+  if (!creator.bio || !creator.profileImageUrl) {
+    nextActions.push({
+      id: actionCounter++,
+      title: 'Complete your profile bio & avatar',
+      description: 'Add a detailed bio and photo so brands can evaluate your niche suitability and personality.',
       actionLabel: 'Edit Profile',
       actionHref: '/creator/profile',
-    },
-    {
-      id: 3,
-      title: 'Explore and apply to 3 relevant campaigns',
-      description: 'Active opportunities in your niche align with your current audience reach.',
-      actionLabel: 'Browse Campaigns',
+    });
+  }
+
+  if (contents.length === 0 && accounts.length > 0) {
+    nextActions.push({
+      id: actionCounter++,
+      title: 'Sync your published videos',
+      description: 'Import your recent video metadata and statistics into CRAB to activate your Content DNA analysis.',
+      actionLabel: 'Refresh Content',
+      actionHref: '#refresh',
+    });
+  }
+
+  if (!aiProfile) {
+    nextActions.push({
+      id: actionCounter++,
+      title: 'Generate Content DNA with AI',
+      description: 'Run deep semantic analysis with Gemini to discover your top content themes and style tags.',
+      actionLabel: 'Run Analysis',
+      actionHref: '#refresh',
+    });
+  }
+
+  if (brandOpportunities.length > 0) {
+    nextActions.push({
+      id: actionCounter++,
+      title: 'Review matched brand opportunities',
+      description: `${brandOpportunities.length} active campaigns match your profile and niche requirements.`,
+      actionLabel: 'View Campaigns',
       actionHref: '/creator/opportunities',
-    },
-    {
-      id: 4,
-      title: 'Experiment with short-form content',
-      description: 'Short clips around tool tips and quick workflows can increase subscriber discovery.',
-      actionLabel: 'Analyze Insights',
-      actionHref: '/creator/intelligence',
-    },
-  ];
+    });
+  }
+
+  const isVerified = Boolean((creator.preferences as any)?.verified === true);
 
   return {
     creator: {
       id: creator.id,
       displayName: creator.displayName,
-      profileImageUrl: creator.profileImageUrl,
-      bio: creator.bio,
-      location: creator.location || 'India',
-      verified: true,
+      profileImageUrl: creator.profileImageUrl || null,
+      bio: creator.bio || null,
+      location: creator.location || null,
+      verified: isVerified,
       niches: [...primaryNiches, ...secondaryNiches].slice(0, 3),
     },
     connectedAccounts,

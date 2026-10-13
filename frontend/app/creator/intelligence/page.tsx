@@ -2,47 +2,119 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import {
-  Sparkles,
-  CheckCircle2,
-  RefreshCw,
-  AlertCircle,
-  Clock,
-  Eye,
-  Heart,
-  Youtube,
-  Instagram,
-  ExternalLink,
-  ChevronRight,
-  TrendingUp,
-  Award,
-  ArrowRight,
-  Check,
-  Building2,
-  Target,
-  Layers,
-  Users,
-  Compass,
-} from 'lucide-react';
 import { useAuth } from '../../../lib/auth-context';
 import { fetchApi } from '../../../lib/api';
+import {
+  RefreshCw,
+  CheckCircle2,
+  Clock,
+  ArrowRight,
+  Youtube,
+  Instagram,
+  TrendingUp,
+  Sparkles,
+  Check,
+  AlertCircle,
+  Lock,
+  ExternalLink,
+} from 'lucide-react';
+
+interface CreatorSnapshot {
+  creator: {
+    id: string;
+    displayName: string;
+    profileImageUrl: string | null;
+    bio: string | null;
+    location: string | null;
+    verified: boolean;
+    niches: string[];
+  };
+  connectedAccounts: Array<{
+    platform: string;
+    username: string;
+    followers: number | null;
+    status: string;
+    isPublicLinkOnly?: boolean;
+  }>;
+  analysisCoverage: {
+    youtubeVideosCount: number;
+    instagramPostsCount: number;
+    recentCommentsCount: number;
+    channelMetadataVerified: boolean;
+    lastAnalyzed: string | null;
+  };
+  contentDna: {
+    topTopics: Array<{ name: string; percentage: number; count?: number }>;
+    formatBreakdown: Array<{ format: string; percentage: number }>;
+    contentStyle: string[];
+  };
+  topContent: Array<{
+    id: string;
+    title: string;
+    thumbnailUrl: string;
+    platform: string;
+    duration: string | null;
+    views: number | null;
+    likes: number | null;
+    tags: string[];
+    permalink: string;
+    publishedAt: string | null;
+  }>;
+  performance: {
+    timeRange: string;
+    averageViews: { value: number | null; changePct: number | null; history: number[] };
+    engagementRate: { value: number | null; changePct: number | null; history: number[] };
+    subscribers: { value: number | null; changePct: number | null; history: number[] };
+    keyTakeaways: string[];
+  };
+  audienceInsights: {
+    hasDemographics: boolean;
+    demographics: Array<{ ageGroup: string; percentage: number }>;
+    topInterests: string[];
+    topLocations: Array<{ country: string; percentage: number }>;
+    notice?: string;
+  };
+  brandOpportunities: Array<{
+    id: string;
+    campaignId: string;
+    brandName: string;
+    brandLogo?: string;
+    title: string;
+    budgetMin: number;
+    budgetMax: number;
+    matchScore: number;
+    tags: string[];
+    status: string;
+  }>;
+  nextActions: Array<{
+    id: number;
+    title: string;
+    description: string;
+    actionLabel: string;
+    actionHref: string;
+  }>;
+}
 
 export default function CreatorIntelligencePage() {
   const { user, token } = useAuth();
-  const [intel, setIntel] = useState<any>(null);
+  const [intel, setIntel] = useState<CreatorSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const [activeTab, setActiveTab] = useState<'content' | 'audience' | 'opportunities' | 'growth'>('content');
   const [audienceSubtab, setAudienceSubtab] = useState<'demographics' | 'interests' | 'locations'>('demographics');
   const [timeRange, setTimeRange] = useState('Last 90 days');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
 
   const fetchIntelligence = async () => {
     if (!token) return;
     setLoading(true);
-    setErrorMsg(null);
     try {
-      const res = await fetchApi<{ data: any }>('/api/creators/me/intelligence', {}, token || undefined);
+      const res = await fetchApi<{ data: CreatorSnapshot }>(
+        '/api/creators/me/intelligence',
+        {},
+        token || undefined
+      );
       if (res?.data) {
         setIntel(res.data);
       }
@@ -58,28 +130,31 @@ export default function CreatorIntelligencePage() {
   }, [token]);
 
   const handleRefresh = async () => {
-    if (refreshing) return;
+    if (refreshing || !token) return;
     setRefreshing(true);
-    setErrorMsg(null);
+    setRefreshNotice(null);
     try {
-      const res = await fetchApi<{ data: any }>(
+      const res = await fetchApi<{ data: CreatorSnapshot; meta?: { message?: string } }>(
         '/api/creators/me/intelligence/analyze',
         { method: 'POST' },
         token || undefined
       );
       if (res?.data) {
-        await fetchIntelligence();
+        setIntel(res.data);
+        setRefreshNotice(res.meta?.message || 'Intelligence refreshed with latest data.');
       }
     } catch (err: any) {
       console.warn('[INTELLIGENCE REFRESH] Error:', err);
-      // Even if AI analyze is rate-limited, re-read cached snapshot
+      // Fallback: re-fetch cached snapshot
       await fetchIntelligence();
+      setRefreshNotice('Refreshed latest available data.');
     } finally {
       setRefreshing(false);
+      setTimeout(() => setRefreshNotice(null), 5000);
     }
   };
 
-  // Sparkline generator
+  // Sparkline generator (only renders when genuine historical points exist)
   const renderSparkline = (points: number[] = [], stroke = '#FF6B00') => {
     if (!points || points.length < 2) return null;
     const min = Math.min(...points);
@@ -93,7 +168,7 @@ export default function CreatorIntelligencePage() {
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
     return (
-      <svg width={width} height={height} className="overflow-visible shrink-0">
+      <svg width={width} height={height} className="overflow-visible shrink-0" aria-hidden="true">
         <polyline
           fill="none"
           stroke={stroke}
@@ -106,183 +181,46 @@ export default function CreatorIntelligencePage() {
     );
   };
 
-  // Safe fallback data mirroring the approved visual specification
+  // Actual creator fields
   const creator = intel?.creator || {
-    displayName: user?.displayName || 'Aryan August',
-    profileImageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    verified: true,
-    niches: ['Tech education', 'Software development', 'AI tools'],
+    id: '',
+    displayName: user?.displayName || user?.name || user?.email?.split('@')[0] || 'Creator',
+    profileImageUrl: null,
+    bio: null,
+    location: null,
+    verified: false,
+    niches: [],
   };
 
-  const connectedAccounts = intel?.connectedAccounts || [
-    { platform: 'YOUTUBE', username: '@alexchen_tech', followers: 124500, status: 'CONNECTED' },
-    { platform: 'INSTAGRAM', username: '@alexchen.dev', followers: 48600, status: 'CONNECTED' },
-    { platform: 'TIKTOK', username: '@alexchen_code', followers: 28400, status: 'CONNECTED' },
-    { platform: 'TWITTER', username: '@alexchen_dev', followers: 12300, status: 'CONNECTED' },
-  ];
-
+  const connectedAccounts = intel?.connectedAccounts || [];
   const coverage = intel?.analysisCoverage || {
-    youtubeVideosCount: 142,
-    instagramPostsCount: 312,
-    recentCommentsCount: 500,
-    channelMetadataVerified: true,
-    lastAnalyzed: 'Oct 13, 2026, 01:32 AM',
+    youtubeVideosCount: 0,
+    instagramPostsCount: 0,
+    recentCommentsCount: 0,
+    channelMetadataVerified: false,
+    lastAnalyzed: null,
   };
-
   const contentDna = intel?.contentDna || {
-    topTopics: [
-      { name: 'Developer Tutorials', percentage: 32 },
-      { name: 'AI Tools & LLMs', percentage: 24 },
-      { name: 'Cloud & DevOps', percentage: 18 },
-      { name: 'Productivity & Setup', percentage: 14 },
-      { name: 'Career & Tech Advice', percentage: 8 },
-      { name: 'Other', percentage: 4 },
-    ],
-    formatBreakdown: [
-      { format: 'Long-form Tutorials', percentage: 42 },
-      { format: 'Short Tutorials', percentage: 26 },
-      { format: 'Tool Reviews', percentage: 16 },
-      { format: 'Explainers', percentage: 10 },
-      { format: 'Q&A / Commentary', percentage: 4 },
-    ],
-    contentStyle: [
-      'Technical & Practical',
-      'Step-by-step Explanations',
-      'Clean Editing',
-      'On-screen Demos',
-      'Beginner Friendly',
-    ],
+    topTopics: [],
+    formatBreakdown: [],
+    contentStyle: [],
   };
-
-  const topContent = intel?.topContent || [
-    {
-      id: 'c1',
-      title: 'Build a Fullstack App with Next.js 14',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600&auto=format&fit=crop',
-      duration: '12:34',
-      views: 2100000,
-      likes: 76400,
-      tags: ['Next.js', 'Web Development'],
-      permalink: 'https://youtube.com',
-    },
-    {
-      id: 'c2',
-      title: 'My Developer Setup (2025)',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop',
-      duration: '10:21',
-      views: 980000,
-      likes: 42100,
-      tags: ['Productivity', 'Setup'],
-      permalink: 'https://youtube.com',
-    },
-    {
-      id: 'c3',
-      title: 'AI Tools I Actually Use',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop',
-      duration: '8:17',
-      views: 620000,
-      likes: 28700,
-      tags: ['AI Tools', 'Workflow'],
-      permalink: 'https://youtube.com',
-    },
-    {
-      id: 'c4',
-      title: 'How I Learned System Design',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop',
-      duration: '14:02',
-      views: 410000,
-      likes: 18200,
-      tags: ['System Design', 'Career'],
-      permalink: 'https://youtube.com',
-    },
-  ];
-
+  const topContent = intel?.topContent || [];
   const performance = intel?.performance || {
-    averageViews: { value: 48200, changePct: 8.7, history: [38000, 41200, 39500, 44000, 46100, 48200] },
-    engagementRate: { value: 5.6, changePct: 1.2, history: [4.9, 5.1, 5.0, 5.3, 5.4, 5.6] },
-    subscribers: { value: 124500, changePct: 12.4, history: [110000, 113000, 116500, 119000, 122000, 124500] },
-    keyTakeaways: [
-      'Long-form tutorials consistently outperform short-form clips.',
-      'Your audience is highly engaged on developer tooling content.',
-      'Recent content shows a positive growth trend compared to your previous 90 days.',
-    ],
+    timeRange: 'Last 90 days',
+    averageViews: { value: null, changePct: null, history: [] },
+    engagementRate: { value: null, changePct: null, history: [] },
+    subscribers: { value: null, changePct: null, history: [] },
+    keyTakeaways: [],
   };
-
   const audienceInsights = intel?.audienceInsights || {
-    demographics: [
-      { ageGroup: '18-24', percentage: 42 },
-      { ageGroup: '25-34', percentage: 38 },
-      { ageGroup: '35-44', percentage: 16 },
-      { ageGroup: '45+', percentage: 6 },
-    ],
-    topInterests: [
-      'Software Engineering',
-      'AI Tools',
-      'Cloud Computing',
-      'Productivity',
-      'Startups',
-    ],
-    topLocations: [
-      { country: 'India', percentage: 48 },
-      { country: 'United States', percentage: 24 },
-      { country: 'United Kingdom', percentage: 9 },
-      { country: 'Germany', percentage: 6 },
-    ],
+    hasDemographics: false,
+    demographics: [],
+    topInterests: [],
+    topLocations: [],
   };
-
-  const brandOpportunities = intel?.brandOpportunities || [
-    {
-      id: 'opp_1',
-      campaignId: 'cmp_notion',
-      brandName: 'Notion',
-      title: 'Creator Education Campaign',
-      budgetMin: 25000,
-      budgetMax: 50000,
-      matchScore: 92,
-      tags: ['Productivity', 'Developer Tools'],
-    },
-    {
-      id: 'opp_2',
-      campaignId: 'cmp_aws',
-      brandName: 'AWS',
-      title: 'Developer Cloud Stories',
-      budgetMin: 40000,
-      budgetMax: 80000,
-      matchScore: 88,
-      tags: ['Cloud Computing', 'Tech Education'],
-    },
-  ];
-
-  const nextActions = intel?.nextActions || [
-    {
-      id: 1,
-      title: 'Publish 2-4 more tutorial videos',
-      description: 'Your audience engages most with in-depth tutorials. Aim for consistent uploads.',
-      actionLabel: 'View Schedule',
-      actionHref: '/creator/dashboard',
-    },
-    {
-      id: 2,
-      title: 'Update your profile and niche details',
-      description: 'Helps brands find and match you with relevant campaigns.',
-      actionLabel: 'Edit Profile',
-      actionHref: '/creator/profile',
-    },
-    {
-      id: 3,
-      title: 'Explore and apply to 3 relevant campaigns',
-      description: 'Notion, AWS and GitHub campaigns align with your content and audience.',
-      actionLabel: 'View Campaigns',
-      actionHref: '/creator/opportunities',
-    },
-    {
-      id: 4,
-      title: 'Experiment with short-form content',
-      description: 'Short clips around tool tips and quick workflows can increase reach.',
-      actionLabel: 'Analyze Formats',
-      actionHref: '/creator/intelligence',
-    },
-  ];
+  const brandOpportunities = intel?.brandOpportunities || [];
+  const nextActions = intel?.nextActions || [];
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
@@ -299,10 +237,12 @@ export default function CreatorIntelligencePage() {
           </div>
 
           <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
-            <span className="text-xs text-[#737373] hidden sm:inline flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 text-[#737373]" />
-              <span>Last updated 2 hours ago</span>
-            </span>
+            {coverage.lastAnalyzed && (
+              <span className="text-xs text-[#737373] hidden sm:inline flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-[#737373]" />
+                <span>Last analyzed {coverage.lastAnalyzed}</span>
+              </span>
+            )}
 
             <button
               type="button"
@@ -316,16 +256,29 @@ export default function CreatorIntelligencePage() {
           </div>
         </div>
 
+        {/* Refresh feedback alert */}
+        {refreshNotice && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{refreshNotice}</span>
+          </div>
+        )}
+
         {/* Creator Identity & Analysis Coverage Banner */}
         <div className="bg-white rounded-2xl p-6 border border-[#E7E1DA] shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           {/* Left: Avatar, Name, Niches, Connected handles */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 flex-1">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden bg-black/5 shrink-0 border border-[#E7E1DA]">
-              <img
-                src={creator.profileImageUrl}
-                alt={creator.displayName}
-                className="w-full h-full object-cover"
-              />
+            <div className="w-16 h-16 rounded-2xl overflow-hidden bg-[#FFE8D6] text-[#FF6B00] shrink-0 border border-[#FFD0B0] flex items-center justify-center font-bold text-xl font-serif">
+              {creator.profileImageUrl && !avatarFailed ? (
+                <img
+                  src={creator.profileImageUrl}
+                  alt={creator.displayName}
+                  onError={() => setAvatarFailed(true)}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{creator.displayName.charAt(0).toUpperCase()}</span>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -341,34 +294,61 @@ export default function CreatorIntelligencePage() {
                 )}
               </div>
 
-              <p className="text-xs text-[#737373] font-medium">
-                {creator.niches.join(' • ')}
-              </p>
+              {creator.niches.length > 0 ? (
+                <p className="text-xs text-[#737373] font-medium">
+                  {creator.niches.join(' • ')}
+                </p>
+              ) : (
+                <p className="text-xs text-[#A3A3A3] italic">
+                  No primary niches defined yet.
+                </p>
+              )}
 
               {/* Connected Platform Stats */}
-              <div className="flex items-center gap-4 flex-wrap pt-1">
-                {connectedAccounts.map((acc: any, i: number) => {
-                  const isYt = acc.platform === 'YOUTUBE';
-                  const isIg = acc.platform === 'INSTAGRAM';
-                  return (
-                    <div key={i} className="flex items-center gap-2 text-xs">
-                      {isYt ? (
-                        <Youtube className="w-4 h-4 text-red-600 shrink-0" />
-                      ) : isIg ? (
-                        <Instagram className="w-4 h-4 text-pink-600 shrink-0" />
-                      ) : (
-                        <span className="w-4 h-4 rounded-full bg-[#171717] text-white flex items-center justify-center text-[9px] font-bold">
-                          {acc.platform.charAt(0)}
-                        </span>
-                      )}
-                      <span className="text-[#737373]">{acc.username}</span>
-                      <strong className="text-[#171717] font-bold">
-                        {acc.followers >= 1000 ? `${(acc.followers / 1000).toFixed(1)}K` : acc.followers}
-                      </strong>
-                    </div>
-                  );
-                })}
-              </div>
+              {connectedAccounts.length > 0 ? (
+                <div className="flex items-center gap-3 flex-wrap pt-1">
+                  {connectedAccounts.map((acc, i) => {
+                    const isYt = acc.platform === 'YOUTUBE';
+                    const isIg = acc.platform === 'INSTAGRAM';
+                    return (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 text-xs bg-[#FAF8F5] px-2.5 py-1 rounded-lg border border-[#E7E1DA]"
+                      >
+                        {isYt ? (
+                          <Youtube className="w-4 h-4 text-red-600 shrink-0" />
+                        ) : isIg ? (
+                          <Instagram className="w-4 h-4 text-pink-600 shrink-0" />
+                        ) : (
+                          <span className="w-4 h-4 rounded-full bg-[#171717] text-white flex items-center justify-center text-[9px] font-bold">
+                            {acc.platform.charAt(0)}
+                          </span>
+                        )}
+                        <span className="text-[#737373] font-medium">{acc.username}</span>
+                        <strong className="text-[#171717] font-bold">
+                          {acc.followers !== null
+                            ? acc.followers >= 1000
+                              ? `${(acc.followers / 1000).toFixed(1)}K`
+                              : acc.followers.toLocaleString()
+                            : acc.isPublicLinkOnly
+                            ? 'Profile Link'
+                            : 'Pending sync'}
+                        </strong>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="pt-1 flex items-center gap-2">
+                  <span className="text-xs text-[#737373]">No social accounts connected yet.</span>
+                  <Link
+                    href="/creator/settings"
+                    className="text-xs font-bold text-[#FF6B00] hover:underline"
+                  >
+                    Connect Platforms &rarr;
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
 
@@ -379,24 +359,51 @@ export default function CreatorIntelligencePage() {
             </div>
             <div className="space-y-1 text-xs">
               <div className="flex items-center gap-2 text-[#171717]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>YouTube content ({coverage.youtubeVideosCount} videos)</span>
+                {coverage.youtubeVideosCount > 0 ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-3.5 h-3.5 text-[#A3A3A3] shrink-0" />
+                )}
+                <span>
+                  YouTube content ({coverage.youtubeVideosCount > 0 ? `${coverage.youtubeVideosCount} videos` : 'No videos synced'})
+                </span>
               </div>
               <div className="flex items-center gap-2 text-[#171717]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Instagram posts ({coverage.instagramPostsCount} posts)</span>
+                {coverage.instagramPostsCount > 0 ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-3.5 h-3.5 text-[#A3A3A3] shrink-0" />
+                )}
+                <span>
+                  Instagram posts ({coverage.instagramPostsCount > 0 ? `${coverage.instagramPostsCount} posts` : 'No posts synced'})
+                </span>
               </div>
               <div className="flex items-center gap-2 text-[#171717]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Recent comments (last {coverage.recentCommentsCount})</span>
+                {coverage.recentCommentsCount > 0 ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-3.5 h-3.5 text-[#A3A3A3] shrink-0" />
+                )}
+                <span>
+                  Recent comments ({coverage.recentCommentsCount > 0 ? `${coverage.recentCommentsCount.toLocaleString()} analyzed` : 'No comments retrieved'})
+                </span>
               </div>
               <div className="flex items-center gap-2 text-[#171717]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Channel metadata</span>
+                {coverage.channelMetadataVerified ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-3.5 h-3.5 text-[#A3A3A3] shrink-0" />
+                )}
+                <span>
+                  Channel metadata {coverage.channelMetadataVerified ? '(Verified channel)' : '(Pending link)'}
+                </span>
               </div>
             </div>
             <div className="text-[11px] text-[#737373] pt-1">
-              Last analyzed: <span className="text-[#171717] font-medium">{coverage.lastAnalyzed}</span>
+              Last analyzed:{' '}
+              <span className="text-[#171717] font-medium">
+                {coverage.lastAnalyzed || 'Not analyzed yet'}
+              </span>
             </div>
           </div>
         </div>
@@ -454,66 +461,99 @@ export default function CreatorIntelligencePage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Col 1: Top Topics */}
-                <div className="space-y-3">
-                  <div className="text-xs font-bold text-[#171717]">Top Topics</div>
-                  <div className="space-y-2.5">
-                    {contentDna.topTopics.map((topic: any, i: number) => (
-                      <div key={i} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-[#525252] font-medium">{topic.name}</span>
-                          <span className="font-bold text-[#171717]">{topic.percentage}%</span>
+              {contentDna.topTopics.length === 0 ? (
+                <div className="p-8 rounded-xl bg-[#FAF8F5] border border-[#E7E1DA] text-center space-y-2">
+                  <h4 className="font-serif text-base font-semibold text-[#171717]">
+                    Your Content DNA is not ready yet.
+                  </h4>
+                  <p className="text-xs text-[#737373] max-w-md mx-auto">
+                    Connect an eligible social account and publish or sync content to discover your main topics, formats, and content patterns.
+                  </p>
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={handleRefresh}
+                      disabled={refreshing}
+                      className="px-4 py-1.5 rounded-lg bg-[#FF6B00] text-white text-xs font-bold hover:bg-[#E56000] transition cursor-pointer"
+                    >
+                      {refreshing ? 'Syncing...' : 'Sync & Analyze Now'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Col 1: Top Topics */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-[#171717]">Top Topics</div>
+                    <div className="space-y-2.5">
+                      {contentDna.topTopics.map((topic, i) => (
+                        <div key={i} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-[#525252] font-medium">{topic.name}</span>
+                            <span className="font-bold text-[#171717]">{topic.percentage}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-[#F8F6F2] rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[#FF6B00] rounded-full"
+                              style={{ width: `${topic.percentage}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="w-full h-1.5 bg-[#F8F6F2] rounded-full overflow-hidden">
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Col 2: Content Format Breakdown */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-[#171717]">Content Format Breakdown</div>
+                    {contentDna.formatBreakdown.length > 0 ? (
+                      <div className="space-y-2 text-xs">
+                        {contentDna.formatBreakdown.map((fmt, i) => (
                           <div
-                            className="h-full bg-[#FF6B00] rounded-full"
-                            style={{ width: `${topic.percentage}%` }}
-                          />
-                        </div>
+                            key={i}
+                            className="flex items-center justify-between p-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA]/60"
+                          >
+                            <span className="text-[#525252] font-medium">{fmt.format}</span>
+                            <span className="font-bold text-[#171717]">{fmt.percentage}%</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <div className="text-xs text-[#A3A3A3] italic p-3 bg-[#FAF8F5] rounded-xl border border-[#E7E1DA]">
+                        No format distribution data available.
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                {/* Col 2: Content Format Breakdown */}
-                <div className="space-y-3">
-                  <div className="text-xs font-bold text-[#171717]">Content Format Breakdown</div>
-                  <div className="space-y-2 text-xs">
-                    {contentDna.formatBreakdown.map((fmt: any, i: number) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA]/60"
-                      >
-                        <span className="text-[#525252] font-medium">{fmt.format}</span>
-                        <span className="font-bold text-[#171717]">{fmt.percentage}%</span>
+                  {/* Col 3: Content Style */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-[#171717]">Content Style</div>
+                    {contentDna.contentStyle.length > 0 ? (
+                      <div className="space-y-2 text-xs">
+                        {contentDna.contentStyle.map((style, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center gap-2 p-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA]/60 text-[#171717] font-semibold"
+                          >
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>{style}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <div className="text-xs text-[#A3A3A3] italic p-3 bg-[#FAF8F5] rounded-xl border border-[#E7E1DA]">
+                        Content style analysis pending. Sync more uploads to extract style markers.
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                {/* Col 3: Content Style */}
-                <div className="space-y-3">
-                  <div className="text-xs font-bold text-[#171717]">Content Style</div>
-                  <div className="space-y-2 text-xs">
-                    {contentDna.contentStyle.map((style: string, i: number) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-2 p-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA]/60 text-[#171717] font-semibold"
-                      >
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>{style}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Top Performing Content Grid */}
               <div className="pt-4 border-t border-[#E7E1DA]/80 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-bold text-[#171717]">
-                    Top Performing Content <span className="text-[#737373] font-normal">(last 90 days)</span>
+                    Top Performing Content <span className="text-[#737373] font-normal">({topContent.length} posts analyzed)</span>
                   </div>
                   <button
                     type="button"
@@ -525,53 +565,91 @@ export default function CreatorIntelligencePage() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {topContent.map((vid: any) => (
-                    <div
-                      key={vid.id}
-                      className="group rounded-2xl border border-[#E7E1DA] bg-[#F8F6F2] overflow-hidden hover:border-[#FF6B00]/60 transition flex flex-col"
-                    >
-                      <div className="relative aspect-video bg-black/10 overflow-hidden">
-                        <img
-                          src={vid.thumbnailUrl}
-                          alt={vid.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                        {vid.duration && (
-                          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/80 text-white text-[10px] font-bold">
-                            {vid.duration}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
-                        <div>
-                          <h4 className="text-xs font-bold text-[#171717] line-clamp-2 leading-snug">
-                            {vid.title}
-                          </h4>
-                          <p className="text-[11px] text-[#737373] mt-1">
-                            {vid.views >= 1000000
-                              ? `${(vid.views / 1000000).toFixed(1)}M`
-                              : `${(vid.views / 1000).toFixed(0)}K`}{' '}
-                            views •{' '}
-                            {vid.likes >= 1000 ? `${(vid.likes / 1000).toFixed(1)}K` : vid.likes} likes
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                          {vid.tags.map((tag: string, idx: number) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-0.5 rounded-md bg-white border border-[#E7E1DA] text-[10px] font-semibold text-[#525252]"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
+                {topContent.length === 0 ? (
+                  <div className="p-8 rounded-xl bg-[#FAF8F5] border border-[#E7E1DA] text-center space-y-2">
+                    <h4 className="font-serif text-base font-semibold text-[#171717]">
+                      No published content synced yet
+                    </h4>
+                    <p className="text-xs text-[#737373] max-w-md mx-auto">
+                      Connect your YouTube or Instagram account in Settings and click Refresh Analysis to import and evaluate your videos.
+                    </p>
+                    <div className="pt-1">
+                      <Link
+                        href="/creator/settings"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#FF6B00] text-white text-xs font-bold hover:bg-[#E56000] transition"
+                      >
+                        <span>Connect Channel</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {topContent.map((vid) => (
+                      <a
+                        key={vid.id}
+                        href={vid.permalink || '#'}
+                        target={vid.permalink && vid.permalink !== '#' ? '_blank' : undefined}
+                        rel="noopener noreferrer"
+                        className="group rounded-2xl border border-[#E7E1DA] bg-[#F8F6F2] overflow-hidden hover:border-[#FF6B00]/60 transition flex flex-col"
+                      >
+                        <div className="relative aspect-video bg-black/10 overflow-hidden flex items-center justify-center">
+                          {vid.thumbnailUrl ? (
+                            <img
+                              src={vid.thumbnailUrl}
+                              alt={vid.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                          ) : (
+                            <div className="text-xs text-[#737373] font-semibold flex items-center gap-1.5">
+                              {vid.platform === 'YOUTUBE' ? (
+                                <Youtube className="w-5 h-5 text-red-600" />
+                              ) : (
+                                <Instagram className="w-5 h-5 text-pink-600" />
+                              )}
+                              <span>{vid.platform}</span>
+                            </div>
+                          )}
+                          {vid.duration && (
+                            <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/80 text-white text-[10px] font-bold">
+                              {vid.duration}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h4 className="text-xs font-bold text-[#171717] line-clamp-2 leading-snug group-hover:text-[#FF6B00] transition-colors">
+                              {vid.title}
+                            </h4>
+                            <p className="text-[11px] text-[#737373] mt-1">
+                              {vid.views !== null
+                                ? vid.views >= 1000000
+                                  ? `${(vid.views / 1000000).toFixed(1)}M views`
+                                  : `${(vid.views / 1000).toFixed(0)}K views`
+                                : 'Views not synced'}
+                              {vid.likes !== null ? ` • ${vid.likes.toLocaleString()} likes` : ''}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1.5 pt-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {vid.tags.slice(0, 2).map((tag, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-2 py-0.5 rounded-md bg-white border border-[#E7E1DA] text-[10px] font-semibold text-[#525252]"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                            <ExternalLink className="w-3 h-3 text-[#A3A3A3] group-hover:text-[#FF6B00] shrink-0" />
+                          </div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -611,15 +689,21 @@ export default function CreatorIntelligencePage() {
                   <div className="p-4 rounded-xl border border-[#E7E1DA] bg-[#F8F6F2] space-y-2">
                     <div className="text-xs text-[#737373] font-medium">Average Views</div>
                     <div className="text-xl font-bold text-[#171717]">
-                      {performance.averageViews.value >= 1000
-                        ? `${(performance.averageViews.value / 1000).toFixed(1)}K`
-                        : performance.averageViews.value}
+                      {performance.averageViews.value !== null
+                        ? performance.averageViews.value >= 1000
+                          ? `${(performance.averageViews.value / 1000).toFixed(1)}K`
+                          : performance.averageViews.value.toLocaleString()
+                        : 'Pending sync'}
                     </div>
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
-                        <TrendingUp className="w-3 h-3" />
-                        <span>+{performance.averageViews.changePct}%</span>
-                      </span>
+                      {performance.averageViews.changePct !== null ? (
+                        <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
+                          <TrendingUp className="w-3 h-3" />
+                          <span>+{performance.averageViews.changePct}%</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[#A3A3A3] font-medium">Baseline</span>
+                      )}
                       {renderSparkline(performance.averageViews.history)}
                     </div>
                   </div>
@@ -628,30 +712,42 @@ export default function CreatorIntelligencePage() {
                   <div className="p-4 rounded-xl border border-[#E7E1DA] bg-[#F8F6F2] space-y-2">
                     <div className="text-xs text-[#737373] font-medium">Engagement Rate</div>
                     <div className="text-xl font-bold text-[#171717]">
-                      {performance.engagementRate.value}%
+                      {performance.engagementRate.value !== null
+                        ? `${performance.engagementRate.value}%`
+                        : 'Pending sync'}
                     </div>
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
-                        <TrendingUp className="w-3 h-3" />
-                        <span>+{performance.engagementRate.changePct}%</span>
-                      </span>
+                      {performance.engagementRate.changePct !== null ? (
+                        <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
+                          <TrendingUp className="w-3 h-3" />
+                          <span>+{performance.engagementRate.changePct}%</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[#A3A3A3] font-medium">Baseline</span>
+                      )}
                       {renderSparkline(performance.engagementRate.history)}
                     </div>
                   </div>
 
                   {/* Subscribers */}
                   <div className="p-4 rounded-xl border border-[#E7E1DA] bg-[#F8F6F2] space-y-2">
-                    <div className="text-xs text-[#737373] font-medium">Subscribers</div>
+                    <div className="text-xs text-[#737373] font-medium">Subscribers / Followers</div>
                     <div className="text-xl font-bold text-[#171717]">
-                      {performance.subscribers.value >= 1000
-                        ? `${(performance.subscribers.value / 1000).toFixed(1)}K`
-                        : performance.subscribers.value}
+                      {performance.subscribers.value !== null
+                        ? performance.subscribers.value >= 1000
+                          ? `${(performance.subscribers.value / 1000).toFixed(1)}K`
+                          : performance.subscribers.value.toLocaleString()
+                        : 'Pending sync'}
                     </div>
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
-                        <TrendingUp className="w-3 h-3" />
-                        <span>+{performance.subscribers.changePct}%</span>
-                      </span>
+                      {performance.subscribers.changePct !== null ? (
+                        <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
+                          <TrendingUp className="w-3 h-3" />
+                          <span>+{performance.subscribers.changePct}%</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[#A3A3A3] font-medium">Baseline</span>
+                      )}
                       {renderSparkline(performance.subscribers.history)}
                     </div>
                   </div>
@@ -712,67 +808,80 @@ export default function CreatorIntelligencePage() {
 
                 {audienceSubtab === 'demographics' && (
                   <div className="space-y-3 pt-1">
-                    {audienceInsights.demographics.map((demo: any, i: number) => (
-                      <div key={i} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-[#525252] font-semibold">{demo.ageGroup}</span>
-                          <span className="font-bold text-[#171717]">{demo.percentage}%</span>
+                    {audienceInsights.hasDemographics && audienceInsights.demographics.length > 0 ? (
+                      audienceInsights.demographics.map((demo, i) => (
+                        <div key={i} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-[#525252] font-semibold">{demo.ageGroup}</span>
+                            <span className="font-bold text-[#171717]">{demo.percentage}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-[#F8F6F2] rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[#FF6B00] rounded-full"
+                              style={{ width: `${demo.percentage}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="w-full h-2 bg-[#F8F6F2] rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-[#FF6B00] rounded-full"
-                            style={{ width: `${demo.percentage}%` }}
-                          />
+                      ))
+                    ) : (
+                      <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E7E1DA] space-y-2.5">
+                        <div className="flex items-center gap-2 text-[#FF6B00]">
+                          <Lock className="w-4 h-4 shrink-0" />
+                          <h4 className="font-semibold text-xs text-[#171717]">
+                            Platform Demographics Permission Required
+                          </h4>
+                        </div>
+                        <p className="text-[11px] text-[#737373] leading-relaxed">
+                          Audience age and gender distributions require owner-authorized platform analytics permissions (e.g. YouTube Analytics API or Instagram Business Insights).
+                        </p>
+                        <div className="text-[11px] text-[#525252] font-medium bg-white p-2.5 rounded-lg border border-[#E7E1DA]">
+                          CRAB never fabricates demographic age brackets. Once you authorize analytics access, verified data will appear here.
                         </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
 
                 {audienceSubtab === 'interests' && (
                   <div className="space-y-3 pt-1">
                     <div className="text-[11px] font-bold text-[#737373]">
-                      Top Interests (from comments and titles)
+                      Top Interests (inferred from content topics and metadata)
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {audienceInsights.topInterests.map((interest: string, i: number) => (
-                        <span
-                          key={i}
-                          className="px-3 py-1.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] text-xs font-semibold text-[#171717]"
-                        >
-                          {interest}
-                        </span>
-                      ))}
-                    </div>
+                    {audienceInsights.topInterests.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {audienceInsights.topInterests.map((interest, i) => (
+                          <span
+                            key={i}
+                            className="px-3 py-1.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] text-xs font-semibold text-[#171717]"
+                          >
+                            {interest}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E7E1DA] text-xs text-[#737373] italic">
+                        No interest themes inferred yet. Connect an account and sync content to generate audience alignment tags.
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {audienceSubtab === 'locations' && (
                   <div className="space-y-3 pt-1">
-                    {audienceInsights.topLocations.map((loc: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between text-xs p-2 rounded-xl bg-[#F8F6F2]">
-                        <span className="text-[#171717] font-semibold">{loc.country}</span>
-                        <strong className="text-[#FF6B00]">{loc.percentage}%</strong>
+                    {audienceInsights.topLocations.length > 0 ? (
+                      audienceInsights.topLocations.map((loc, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs p-2 rounded-xl bg-[#F8F6F2]">
+                          <span className="text-[#171717] font-semibold">{loc.country}</span>
+                          <strong className="text-[#FF6B00]">{loc.percentage}%</strong>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E7E1DA] text-xs text-[#737373] italic">
+                        Geographic analytics require owner-authorized platform analytics access.
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
-
-                <div className="pt-2 border-t border-[#E7E1DA]/80">
-                  <div className="text-[11px] font-bold text-[#737373] mb-2">
-                    Top interests (from comments and titles)
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {audienceInsights.topInterests.slice(0, 3).map((item: string, idx: number) => (
-                      <span
-                        key={idx}
-                        className="px-2.5 py-1 rounded-lg bg-[#F8F6F2] border border-[#E7E1DA] text-[11px] font-semibold text-[#525252]"
-                      >
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -804,54 +913,71 @@ export default function CreatorIntelligencePage() {
                   </Link>
                 </div>
 
-                <div className="space-y-3">
-                  {brandOpportunities.map((opp: any) => (
-                    <div
-                      key={opp.id}
-                      className="p-4 rounded-2xl border border-[#E7E1DA] bg-[#F8F6F2] hover:border-[#FF6B00]/60 transition space-y-3"
+                {brandOpportunities.length === 0 ? (
+                  <div className="p-6 rounded-xl bg-[#FAF8F5] border border-[#E7E1DA] text-center space-y-1.5">
+                    <div className="text-xs font-semibold text-[#171717]">
+                      No active campaigns currently match your profile
+                    </div>
+                    <p className="text-[11px] text-[#737373]">
+                      New campaigns are posted regularly. Check back soon or browse open opportunities.
+                    </p>
+                    <Link
+                      href="/creator/opportunities"
+                      className="inline-block mt-1 text-xs font-bold text-[#FF6B00] hover:underline"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center font-bold text-sm shrink-0">
-                            {opp.brandName.charAt(0)}
+                      Browse Opportunities &rarr;
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {brandOpportunities.map((opp) => (
+                      <div
+                        key={opp.id}
+                        className="p-4 rounded-2xl border border-[#E7E1DA] bg-[#F8F6F2] hover:border-[#FF6B00]/60 transition space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center font-bold text-sm shrink-0">
+                              {opp.brandName.charAt(0)}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-[#171717]">{opp.brandName}</div>
+                              <div className="text-xs font-semibold text-[#525252]">{opp.title}</div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="text-xs font-bold text-[#171717]">{opp.brandName}</div>
-                            <div className="text-xs font-semibold text-[#525252]">{opp.title}</div>
-                          </div>
-                        </div>
 
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold shrink-0">
-                          {opp.matchScore}% match
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs pt-1 border-t border-[#E7E1DA]/60">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {opp.tags.map((tag: string, idx: number) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-0.5 rounded-md bg-white border border-[#E7E1DA] text-[10px] font-semibold text-[#737373]"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                          <span className="text-[#171717] font-bold ml-1">
-                            ₹{opp.budgetMin.toLocaleString()} - ₹{opp.budgetMax.toLocaleString()}
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold shrink-0">
+                            {opp.matchScore}% match
                           </span>
                         </div>
 
-                        <Link
-                          href="/creator/opportunities"
-                          className="font-bold text-[#FF6B00] hover:underline flex items-center gap-0.5 shrink-0"
-                        >
-                          <span>View Campaign</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </Link>
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-[#E7E1DA]/60">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {opp.tags.map((tag, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 rounded-md bg-white border border-[#E7E1DA] text-[10px] font-semibold text-[#737373]"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                            <span className="text-[#171717] font-bold ml-1">
+                              ₹{opp.budgetMin.toLocaleString()} - ₹{opp.budgetMax.toLocaleString()}
+                            </span>
+                          </div>
+
+                          <Link
+                            href="/creator/opportunities"
+                            className="font-bold text-[#FF6B00] hover:underline flex items-center gap-0.5 shrink-0"
+                          >
+                            <span>View Campaign</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </Link>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Right (6 cols): Your Next Best Actions */}
@@ -868,34 +994,52 @@ export default function CreatorIntelligencePage() {
                   </p>
                 </div>
 
-                <div className="space-y-3">
-                  {nextActions.map((action: any) => (
-                    <div
-                      key={action.id}
-                      className="p-3.5 rounded-2xl border border-[#E7E1DA] bg-[#F8F6F2] flex items-start gap-3.5"
-                    >
-                      <span className="w-6 h-6 rounded-full bg-[#FF6B00] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-                        {action.id}
-                      </span>
+                {nextActions.length === 0 ? (
+                  <div className="p-6 rounded-xl bg-[#FAF8F5] border border-[#E7E1DA] text-center text-xs text-[#737373]">
+                    All recommended profile actions are up to date!
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {nextActions.map((action) => (
+                      <div
+                        key={action.id}
+                        className="p-3.5 rounded-2xl border border-[#E7E1DA] bg-[#F8F6F2] flex items-start gap-3.5"
+                      >
+                        <span className="w-6 h-6 rounded-full bg-[#FF6B00] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                          {action.id}
+                        </span>
 
-                      <div className="flex-1 space-y-1">
-                        <h4 className="text-xs font-bold text-[#171717]">
-                          {action.title}
-                        </h4>
-                        <p className="text-[11px] text-[#737373] leading-relaxed">
-                          {action.description}
-                        </p>
-                        <Link
-                          href={action.actionHref}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-[#FF6B00] hover:underline pt-1"
-                        >
-                          <span>{action.actionLabel}</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </Link>
+                        <div className="flex-1 space-y-1">
+                          <h4 className="text-xs font-bold text-[#171717]">
+                            {action.title}
+                          </h4>
+                          <p className="text-[11px] text-[#737373] leading-relaxed">
+                            {action.description}
+                          </p>
+                          {action.actionHref === '#refresh' ? (
+                            <button
+                              type="button"
+                              onClick={handleRefresh}
+                              disabled={refreshing}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-[#FF6B00] hover:underline pt-1 cursor-pointer"
+                            >
+                              <span>{action.actionLabel}</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          ) : (
+                            <Link
+                              href={action.actionHref}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-[#FF6B00] hover:underline pt-1"
+                            >
+                              <span>{action.actionLabel}</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </Link>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
