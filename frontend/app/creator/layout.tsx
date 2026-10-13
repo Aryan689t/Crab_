@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/auth-context';
 
 import { Menu } from 'lucide-react';
 import { NotificationBell } from '../../components/notifications/NotificationBell';
+import { Footer } from '../../components/Footer';
 
 export default function CreatorLayout({
   children,
@@ -19,6 +20,7 @@ export default function CreatorLayout({
   const router = useRouter();
 
   const isOnboarding = pathname === '/creator/onboarding';
+  const isInbox = pathname?.includes('/inbox');
 
   useEffect(() => {
     if (loading) return;
@@ -128,8 +130,11 @@ export default function CreatorLayout({
         </header>
 
         {/* Scrollable Page Content */}
-        <div className="flex-1 overflow-y-auto">
-          {children}
+        <div className="flex-1 overflow-y-auto flex flex-col">
+          <div className="flex-1">
+            {children}
+          </div>
+          {!isInbox && <Footer variant="portal" portalRole="creator" />}
         </div>
       </div>
     </div>

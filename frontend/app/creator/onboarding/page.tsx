@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../lib/auth-context';
 import { fetchApi, invalidateApiCache } from '../../../lib/api';
+import { Footer } from '../../../components/Footer';
 import {
   Youtube,
   Instagram,
@@ -347,9 +348,7 @@ export default function CreatorOnboardingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="py-6 border-t border-[#E7E1DA] text-center text-xs text-neutral-400">
-        <p>© 2026 CRAB — Creator & Brand Alignment Bridge. All rights reserved.</p>
-      </footer>
+      <Footer variant="auth" />
     </div>
   );
 }
