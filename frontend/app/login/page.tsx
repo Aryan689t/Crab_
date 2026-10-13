@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth, UserRole } from '@/lib/auth-context';
 import { Sparkles, ArrowRight, User, Building2, Lock, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Footer } from '@/components/Footer';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -206,9 +207,7 @@ export default function LoginPage() {
       </div>
 
       {/* Footer */}
-      <footer className="text-center py-6 text-xs text-[#8B90A5] border-t border-[#E7E8F0] bg-white">
-        © 2026 CRAB Platform • Creators Reaching Aligned Brands
-      </footer>
+      <Footer variant="auth" />
     </div>
   );
 }

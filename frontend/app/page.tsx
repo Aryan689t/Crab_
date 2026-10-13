@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import CreatorCarousel from '@/components/CreatorCarousel';
+import { Footer } from '@/components/Footer';
 
 const FAQ_ITEMS = [
   {
@@ -629,64 +630,9 @@ export default function RootLandingPage() {
       </main>
 
       {/* ========================================================================
-          10. FOOTER (High-Contrast Dark Surface)
+          10. GLOBAL FOOTER
           ======================================================================== */}
-      <footer className="bg-[#0a0a0a] text-white py-16 px-6 border-t border-white/10">
-        <div className="max-w-[1240px] mx-auto grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
-
-          {/* Brand Info */}
-          <div className="space-y-4 md:col-span-1">
-            <Link href="/" className="inline-flex items-center gap-2.5 group">
-              <img
-                src="/crab-logo.png"
-                alt="CRAB"
-                className="w-8 h-8 object-contain group-hover:scale-105 transition-transform"
-              />
-              <span className="font-serif font-bold text-xl text-white">CRAB</span>
-            </Link>
-            <p className="text-xs text-white/60 leading-relaxed">
-              Creators Reaching Aligned Brands. Direct partnerships built on shared taste, audience resonance, and zero agency middlemen.
-            </p>
-          </div>
-
-          {/* Quick Links */}
-          <div>
-            <div className="font-mono text-xs font-semibold text-[#ff6600] uppercase tracking-wider mb-4">Account & Access</div>
-            <ul className="space-y-2.5 text-xs text-white/70">
-              <li><Link href="/login" className="hover:text-white transition-colors">Sign In</Link></li>
-              <li><Link href="/signup" className="hover:text-white transition-colors">Get Started</Link></li>
-            </ul>
-          </div>
-
-          <div>
-            <div className="font-mono text-xs font-semibold text-[#ff6600] uppercase tracking-wider mb-4">Platform Exploration</div>
-            <ul className="space-y-2.5 text-xs text-white/70">
-              <li><a href="#story" className="hover:text-white transition-colors">Our Founding Mission</a></li>
-              <li><a href="#gallery" className="hover:text-white transition-colors">Creative Disciplines</a></li>
-              <li><a href="#how-it-works" className="hover:text-white transition-colors">Four-Step Workflow</a></li>
-              <li><a href="#principles" className="hover:text-white transition-colors">Alignment Principles</a></li>
-              <li><a href="#faq" className="hover:text-white transition-colors">FAQ & Support</a></li>
-            </ul>
-          </div>
-
-          <div>
-            <div className="font-mono text-xs font-semibold text-[#ff6600] uppercase tracking-wider mb-4">Guiding Ethos</div>
-            <p className="text-xs text-white/60 leading-relaxed">
-              We reject cold spam, inflated vanity metrics, and non-transparent sponsorship deals. Real influence is built on audience trust.
-            </p>
-          </div>
-
-        </div>
-
-        <div className="max-w-[1240px] mx-auto pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between text-xs text-white/40 gap-4">
-          <p>© 2026 CRAB Platform. All rights reserved.</p>
-          <div className="flex gap-6">
-            <Link href="/login" className="hover:text-white/80 transition-colors">Sign In</Link>
-            <Link href="/signup" className="hover:text-white/80 transition-colors">Sign Up</Link>
-            <a href="#principles" className="hover:text-white/80 transition-colors">Alignment Manifesto</a>
-          </div>
-        </div>
-      </footer>
+      <Footer variant="marketing" />
 
       {/* ========================================================================
           11. ONBOARDING & APPLICATION MODALS

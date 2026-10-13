@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { BrandSidebar } from '../../components/BrandSidebar';
 import { Menu } from 'lucide-react';
 import { useAuth } from '../../lib/auth-context';
 import { NotificationBell } from '../../components/notifications/NotificationBell';
+import { Footer } from '../../components/Footer';
 
 export default function BrandLayout({
   children,
@@ -13,6 +15,8 @@ export default function BrandLayout({
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user } = useAuth();
+  const pathname = usePathname();
+  const isInbox = pathname?.includes('/inbox');
 
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-[#F8F6F2]">
@@ -46,8 +50,11 @@ export default function BrandLayout({
         </header>
 
         {/* Scrollable Page Content */}
-        <div className="flex-1 overflow-y-auto">
-          {children}
+        <div className="flex-1 overflow-y-auto flex flex-col">
+          <div className="flex-1">
+            {children}
+          </div>
+          {!isInbox && <Footer variant="portal" portalRole="brand" />}
         </div>
       </div>
     </div>
