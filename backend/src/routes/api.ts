@@ -6,7 +6,7 @@ import { brandRouter } from './brands.js';
 import { campaignRouter } from './campaigns.js';
 import { socialRouter } from './social.js';
 import { applicationRouter } from './applications.js';
-import { conversationRouter } from './conversations.js';
+import { conversationRouter, notificationRouter } from './conversations.js';
 import { requestRouter } from './requests.js';
 import { collaborationRouter } from './collaborations.js';
 
@@ -23,6 +23,7 @@ apiRouter.use('/application', applicationRouter);
 apiRouter.use('/collaborations', collaborationRouter);
 apiRouter.use('/conversations', conversationRouter);
 apiRouter.use('/conversation', conversationRouter);
+apiRouter.use('/notifications', notificationRouter);
 apiRouter.use('/requests', requestRouter);
 apiRouter.use('/invitations', requestRouter);
 

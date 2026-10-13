@@ -23,8 +23,20 @@ import {
   AlertCircle,
   RefreshCw,
   Sparkles,
+  Download,
+  Image as ImageIcon,
+  X,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { useMessageNotifications } from '../../../lib/notification-context';
+
+export interface MessageAttachmentItem {
+  id: string;
+  originalFilename: string;
+  mimeType: string;
+  fileSize: number;
+  createdAt?: string;
+}
 
 interface ConversationItem {
   id: string;
@@ -54,6 +66,7 @@ interface MessageItem {
   time: string;
   createdAt?: string;
   type: 'TEXT' | 'OFFER';
+  attachments?: MessageAttachmentItem[];
   offer?: {
     id?: string;
     amount: number;
@@ -62,21 +75,32 @@ interface MessageItem {
   };
 }
 
+function formatFileSize(bytes: number): string {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
 function CreatorInboxContent() {
   const searchParams = useSearchParams();
   const targetConvId = searchParams.get('conversationId') || searchParams.get('id');
   const { user, token } = useAuth();
+  const { markConversationAsReadLocally } = useMessageNotifications();
 
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConv, setActiveConv] = useState<ConversationItem | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [inputText, setInputText] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [errorConversations, setErrorConversations] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
@@ -168,12 +192,13 @@ function CreatorInboxContent() {
         const mapped: MessageItem[] = res.data.messages.map((m: any) => ({
           id: m.id,
           senderId: m.senderUserId === user?.id ? 'creator' : 'brand',
-          text: m.messageText,
+          text: m.messageText || '',
           time: m.createdAt
             ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             : 'Just now',
           createdAt: m.createdAt,
           type: 'TEXT',
+          attachments: m.attachments || [],
         }));
 
         // Attach persisted offers if present
@@ -206,6 +231,7 @@ function CreatorInboxContent() {
           (m: any) => m.senderUserId !== user?.id && !m.readAt
         );
         if (hasUnread) {
+          markConversationAsReadLocally(activeConv.id);
           fetchApi(`/api/conversations/${activeConv.id}/read`, { method: 'POST' }, token)
             .then(() => {
               // Reset local unread badge count
@@ -247,28 +273,98 @@ function CreatorInboxContent() {
     scrollToBottom();
   }, [messages.length]);
 
-  // 4. Send Message Handler
+  const ALLOWED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.docx', '.doc', '.txt'];
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE) {
+      setSendError('File exceeds 10 MB limit. Please select a smaller file.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      setSendError('Unsupported file type. Allowed formats: PDF, PNG, JPEG, WEBP, DOCX, TXT.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setSendError(null);
+    setSelectedFile(file);
+  };
+
+  const removeSelectedFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDownloadAttachment = async (attachment: MessageAttachmentItem) => {
+    if (!token || !activeConv) return;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/conversations/${activeConv.id}/attachments/${attachment.id}/download`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!res.ok) {
+        throw new Error('Failed to download attachment');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.originalFilename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('Download error:', err);
+      setSendError(err.message || 'Unable to download attachment. Please try again.');
+    }
+  };
+
+  // 4. Send Message Handler (supports text, attachment, or both)
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const textToSend = inputText.trim();
-    if (!textToSend || sending || !activeConv) return;
+    if ((!textToSend && !selectedFile) || sending || !activeConv) return;
 
     setSending(true);
     setSendError(null);
 
     try {
+      let bodyData: any;
+      if (selectedFile) {
+        const formData = new FormData();
+        if (textToSend) formData.append('messageText', textToSend);
+        formData.append('file', selectedFile);
+        bodyData = formData;
+      } else {
+        bodyData = JSON.stringify({ messageText: textToSend });
+      }
+
       const res = await fetchApi<{ data: any }>(
         `/api/conversations/${activeConv.id}/messages`,
         {
           method: 'POST',
-          body: JSON.stringify({ messageText: textToSend }),
+          body: bodyData,
         },
         token || undefined
       );
 
       if (res?.data) {
-        // Clear input only on confirmed success
+        // Clear input and attachment only on confirmed success
         setInputText('');
+        setSelectedFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
 
         const newMsg: MessageItem = {
           id: res.data.id || `msg_${Date.now()}`,
@@ -276,17 +372,24 @@ function CreatorInboxContent() {
           text: res.data.messageText || textToSend,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           type: 'TEXT',
+          attachments: res.data.attachments || [],
         };
 
         setMessages((prev) => [...prev, newMsg]);
 
         // Update local lastMessage in conversation list
+        const summary =
+          textToSend ||
+          (res.data.attachments?.[0]
+            ? `📎 ${res.data.attachments[0].originalFilename}`
+            : 'Sent attachment');
+
         setConversations((prev) =>
           prev.map((c) =>
             c.id === activeConv.id
               ? {
                   ...c,
-                  lastMessage: textToSend,
+                  lastMessage: summary,
                   time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 }
               : c
@@ -607,13 +710,74 @@ function CreatorInboxContent() {
                         className={`flex ${isCreator ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className={`max-w-md rounded-2xl p-4 shadow-2xs space-y-1 text-xs leading-relaxed ${
+                          className={`max-w-md rounded-2xl p-4 shadow-2xs space-y-2 text-xs leading-relaxed ${
                             isCreator
                               ? 'bg-[#171717] text-white rounded-tr-xs'
                               : 'bg-white text-[#171717] border border-[#E7E1DA] rounded-tl-xs'
                           }`}
                         >
-                          <p className="whitespace-pre-wrap">{msg.text}</p>
+                          {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
+
+                          {/* Message Attachments */}
+                          {msg.attachments && msg.attachments.length > 0 && (
+                            <div className="space-y-1.5 pt-0.5">
+                              {msg.attachments.map((att) => {
+                                const isImg = att.mimeType.startsWith('image/');
+                                return (
+                                  <div
+                                    key={att.id}
+                                    className={`rounded-xl p-2.5 flex items-center justify-between gap-3 border transition ${
+                                      isCreator
+                                        ? 'bg-white/10 border-white/20 text-white'
+                                        : 'bg-[#F8F6F2] border-[#E7E1DA] text-[#171717]'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <div
+                                        className={`p-2 rounded-lg shrink-0 ${
+                                          isCreator
+                                            ? 'bg-white/20 text-white'
+                                            : 'bg-white border border-[#E7E1DA] text-[#FF6B00]'
+                                        }`}
+                                      >
+                                        {isImg ? (
+                                          <ImageIcon className="w-4 h-4" />
+                                        ) : (
+                                          <FileText className="w-4 h-4" />
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-semibold truncate leading-tight">
+                                          {att.originalFilename}
+                                        </p>
+                                        <p
+                                          className={`text-[10px] ${
+                                            isCreator ? 'text-white/70' : 'text-[#737373]'
+                                          }`}
+                                        >
+                                          {formatFileSize(att.fileSize)}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadAttachment(att)}
+                                      className={`p-1.5 rounded-lg text-xs font-medium transition cursor-pointer shrink-0 ${
+                                        isCreator
+                                          ? 'hover:bg-white/20 text-white'
+                                          : 'hover:bg-[#E7E1DA] text-[#171717]'
+                                      }`}
+                                      title={`Download ${att.originalFilename}`}
+                                    >
+                                      <Download className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
                           <div
                             className={`text-[10px] text-right ${
                               isCreator ? 'text-white/60' : 'text-[#737373]'
@@ -643,21 +807,58 @@ function CreatorInboxContent() {
                     </button>
                   </div>
                 )}
+
+                {/* Selected File Preview */}
+                {selectedFile && (
+                  <div className="flex items-center justify-between px-3 py-2 bg-[#FFF4EB] border border-[#FF6B00]/30 rounded-xl text-xs text-[#171717]">
+                    <div className="flex items-center gap-2 truncate">
+                      <Paperclip className="w-3.5 h-3.5 text-[#FF6B00] shrink-0" />
+                      <span className="font-semibold truncate">{selectedFile.name}</span>
+                      <span className="text-[11px] text-[#737373] shrink-0">
+                        ({formatFileSize(selectedFile.size)})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeSelectedFile}
+                      className="p-1 hover:bg-[#FF6B00]/10 rounded-md text-[#737373] hover:text-[#171717] transition ml-2 cursor-pointer"
+                      title="Remove attachment"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
                 <form
                   onSubmit={handleSendMessage}
                   className="flex items-center gap-2.5"
                 >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.doc,.txt"
+                    className="hidden"
+                    id="creator-file-input"
+                  />
+
                   <button
                     type="button"
-                    className="p-2 rounded-xl text-[#737373] hover:text-[#171717] hover:bg-[#F8F6F2] transition"
-                    title="Attach file"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending}
+                    className={`p-2 rounded-xl transition cursor-pointer ${
+                      selectedFile
+                        ? 'bg-[#FFF4EB] text-[#FF6B00]'
+                        : 'text-[#737373] hover:text-[#171717] hover:bg-[#F8F6F2]'
+                    }`}
+                    title="Attach file (PDF, PNG, JPG, DOCX, TXT - max 10MB)"
                   >
                     <Paperclip className="w-4 h-4" />
                   </button>
 
                   <input
                     type="text"
-                    placeholder="Type your reply or proposal..."
+                    placeholder={selectedFile ? "Add an optional note with attachment..." : "Type your reply or proposal..."}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     disabled={sending}
@@ -666,12 +867,13 @@ function CreatorInboxContent() {
 
                   <button
                     type="submit"
-                    disabled={!inputText.trim() || sending}
+                    disabled={(!inputText.trim() && !selectedFile) || sending}
                     className={`p-2.5 rounded-xl font-bold transition shadow-xs ${
-                      inputText.trim() && !sending
+                      (inputText.trim() || selectedFile) && !sending
                         ? 'bg-[#FF6B00] hover:bg-[#e05e00] text-white cursor-pointer'
                         : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                     }`}
+                    title={sending ? 'Sending...' : 'Send message'}
                   >
                     {sending ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
