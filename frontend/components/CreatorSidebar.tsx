@@ -14,6 +14,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
+import { useMessageNotifications } from '../lib/notification-context';
 import { Sidebar, SidebarBody } from './ui/sidebar';
 
 interface CreatorSidebarProps {
@@ -24,13 +25,19 @@ interface CreatorSidebarProps {
 export function CreatorSidebar({ isOpen, setIsOpen }: CreatorSidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { unreadCount } = useMessageNotifications();
 
   const navItems = [
     { label: 'Overview', href: '/creator/dashboard', icon: Home },
     { label: 'Discover', href: '/creator/discover', icon: Search },
     { label: 'Opportunities', href: '/creator/opportunities', icon: Mail, badge: '8' },
     { label: 'Collaborations', href: '/creator/collaborations', icon: Users },
-    { label: 'Inbox', href: '/creator/inbox', icon: MessageSquare, badge: '3' },
+    {
+      label: 'Inbox',
+      href: '/creator/inbox',
+      icon: MessageSquare,
+      badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : String(unreadCount)) : undefined,
+    },
     { label: 'Intelligence', href: '/creator/intelligence', icon: Sparkles },
   ];
 

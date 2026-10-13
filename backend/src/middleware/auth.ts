@@ -55,16 +55,21 @@ export async function authenticateToken(
   next: NextFunction
 ): Promise<void> {
   const start = Date.now();
+  let token = '';
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (typeof req.query.token === 'string' && req.query.token) {
+    token = req.query.token;
+  }
+
+  if (!token) {
     res.status(401).json({
       error: 'Unauthorized',
-      message: 'Missing or invalid Authorization header. Expected Bearer token.',
+      message: 'Missing or invalid Authorization header or token parameter.',
     });
     return;
   }
-
-  const token = authHeader.split(' ')[1];
   const tokenHash = hashToken(token);
   const now = Date.now();
 

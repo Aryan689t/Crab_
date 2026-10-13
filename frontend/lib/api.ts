@@ -73,12 +73,14 @@ export async function fetchApi<T>(
 ): Promise<T> {
   const method = (options.method || 'GET').toUpperCase();
   const isGet = method === 'GET';
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const isCacheable =
     isGet &&
     !endpoint.includes('/auth/login') &&
     !endpoint.includes('/auth/register') &&
     !endpoint.includes('/conversations') &&
     !endpoint.includes('/messages') &&
+    !endpoint.includes('/notifications') &&
     options.cache !== 'no-store';
 
   const cacheKey = getCacheKey(endpoint, token);
@@ -97,9 +99,15 @@ export async function fetchApi<T>(
     return inFlightRequests.get(cacheKey) as Promise<T>;
   }
 
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+  const baseHeaders: Record<string, string> = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  if (!isFormData) {
+    baseHeaders['Content-Type'] = 'application/json';
+  }
+
+  const headers: HeadersInit = {
+    ...baseHeaders,
     ...options.headers,
   };
 

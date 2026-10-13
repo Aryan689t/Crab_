@@ -32,3 +32,8 @@ yarn-error.log*
 .vercel
 .DS_Store
 Thumbs.db
+
+# Storage and uploads
+backend/storage/
+storage/
+uploads/

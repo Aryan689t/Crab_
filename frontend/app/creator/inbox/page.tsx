@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '../../../lib/auth-context';
 import { fetchApi } from '../../../lib/api';
@@ -18,302 +19,392 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-  PanelLeftClose,
-  PanelLeftOpen,
   Loader2,
+  AlertCircle,
+  RefreshCw,
   Sparkles,
+  Download,
+  Image as ImageIcon,
+  X,
 } from 'lucide-react';
 import { PortalPageHeader } from '../../../components/creator/PortalPageHeader';
+import { useMessageNotifications } from '../../../lib/notification-context';
 
-interface Conversation {
+export interface MessageAttachmentItem {
+  id: string;
+  originalFilename: string;
+  mimeType: string;
+  fileSize: number;
+  createdAt?: string;
+}
+
+interface ConversationItem {
   id: string;
   brand: {
+    id?: string;
     name: string;
     avatar: string;
+    category?: string;
   };
   campaign: {
-    name: string;
     id: string;
+    name: string;
   };
   lastMessage: string;
   time: string;
   unread: number;
   status: string;
+  offers?: any[];
   messages?: any[];
+  raw?: any;
 }
 
-interface Message {
+interface MessageItem {
   id: string;
   senderId: 'brand' | 'creator';
   text: string;
   time: string;
+  createdAt?: string;
   type: 'TEXT' | 'OFFER';
+  attachments?: MessageAttachmentItem[];
   offer?: {
+    id?: string;
     amount: number;
     deliverables: string[];
-    status: 'PENDING' | 'ACCEPTED';
+    status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'COUNTERED';
   };
 }
 
-const MOCK_CONVERSATIONS: Conversation[] = [
-  {
-    id: 'conv_1',
-    brand: {
-      name: 'Acme Cloud',
-      avatar: 'AC',
-    },
-    campaign: {
-      name: 'Cloud Infrastructure Launch',
-      id: 'camp_1',
-    },
-    lastMessage: 'I can definitely highlight the new CLI tools in the tutorial.',
-    time: '10:42 AM',
-    unread: 0,
-    status: 'NEGOTIATING',
-  },
-  {
-    id: 'conv_2',
-    brand: {
-      name: 'TechFlow',
-      avatar: 'TF',
-    },
-    campaign: {
-      name: 'AI Database Integration',
-      id: 'camp_2',
-    },
-    lastMessage: 'The contract looks good. Deliverable draft submitted.',
-    time: 'Yesterday',
-    unread: 1,
-    status: 'ACTIVE',
-  },
-];
-
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: 'msg_1',
-    senderId: 'brand',
-    text: 'Hi Alex, we loved your recent technical video on container deployments. We are launching a developer CLI and think your channel is an ideal fit. Would you be open to collaborating?',
-    time: '10:00 AM',
-    type: 'TEXT',
-  },
-  {
-    id: 'msg_2',
-    senderId: 'creator',
-    text: 'Hi! Yes, I actually use your current platform regularly. I would love to explore the new features and walk through a real-world demo.',
-    time: '10:15 AM',
-    type: 'TEXT',
-  },
-  {
-    id: 'msg_3',
-    senderId: 'brand',
-    text: '',
-    time: '10:20 AM',
-    type: 'OFFER',
-    offer: {
-      amount: 75000,
-      deliverables: [
-        '1x 12-min Dedicated YouTube Walkthrough Video',
-        'Pinned comment with promo link & tracking code',
-      ],
-      status: 'PENDING',
-    },
-  },
-  {
-    id: 'msg_4',
-    senderId: 'creator',
-    text: 'I can definitely highlight the new CLI tools and performance benchmarks in the tutorial.',
-    time: '10:42 AM',
-    type: 'TEXT',
-  },
-];
+function formatFileSize(bytes: number): string {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
 
 function CreatorInboxContent() {
   const searchParams = useSearchParams();
   const targetConvId = searchParams.get('conversationId') || searchParams.get('id');
   const { user, token } = useAuth();
+  const { markConversationAsReadLocally } = useMessageNotifications();
 
-  const [dbConversations, setDbConversations] = useState<any[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
-  const [activeConv, setActiveConv] = useState<Conversation>(MOCK_CONVERSATIONS[0]);
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [activeConv, setActiveConv] = useState<ConversationItem | null>(null);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
   const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [errorConversations, setErrorConversations] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
-  const [sending, setSending] = useState(false);
 
-  // 1. Fetch conversations list from backend
-  const loadConversations = async () => {
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // 1. Fetch conversations from PostgreSQL
+  const loadConversations = async (silent = false) => {
     if (!token) return;
+    if (!silent) {
+      setLoadingConversations(true);
+      setErrorConversations(null);
+    }
     try {
       const res = await fetchApi<{ data: any[] }>('/api/conversations', {}, token);
       if (res?.data && Array.isArray(res.data)) {
-        setDbConversations(res.data);
+        const mapped: ConversationItem[] = res.data.map((c: any) => {
+          const brandName = c.brand?.name || 'Partner Brand';
+          const brandAvatar = brandName.slice(0, 2).toUpperCase();
+          const lastMsg = c.lastMessage || c.messages?.[c.messages.length - 1];
+
+          return {
+            id: c.id,
+            brand: {
+              id: c.brand?.id,
+              name: brandName,
+              avatar: brandAvatar,
+              category: c.brand?.category,
+            },
+            campaign: {
+              id: c.campaign?.id || '',
+              name: c.campaign?.title || 'Collaboration Sprint',
+            },
+            lastMessage: lastMsg?.messageText || 'Conversation started',
+            time: lastMsg?.createdAt
+              ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'Active',
+            unread: c.unreadCount !== undefined ? c.unreadCount : 0,
+            status: c.collaboration?.status || 'ACTIVE',
+            offers: c.offers || [],
+            messages: c.messages || [],
+            raw: c,
+          };
+        });
+
+        setConversations(mapped);
+
+        // Auto-select conversation
+        if (targetConvId) {
+          const matched = mapped.find((item) => item.id === targetConvId);
+          if (matched) {
+            setActiveConv(matched);
+            setMobileChatOpen(true);
+          } else if (mapped.length > 0 && !activeConv) {
+            setActiveConv(mapped[0]);
+          }
+        } else if (mapped.length > 0 && (!activeConv || !mapped.some((item) => item.id === activeConv.id))) {
+          setActiveConv(mapped[0]);
+        } else if (mapped.length === 0) {
+          setActiveConv(null);
+        }
       }
-    } catch (err) {
-      console.warn('[CREATOR_INBOX] Backend conversation fetch fallback:', err);
+    } catch (err: any) {
+      console.error('[CREATOR_INBOX] Failed to load conversations:', err);
+      if (!silent) {
+        setErrorConversations(err.message || 'Unable to load conversations. Please try again.');
+      }
+    } finally {
+      if (!silent) setLoadingConversations(false);
     }
   };
 
   useEffect(() => {
     loadConversations();
-  }, [token]);
+  }, [token, targetConvId]);
 
-  // Combine live PostgreSQL conversations with mock conversations
-  useEffect(() => {
-    if (dbConversations.length > 0) {
-      const mappedDb: Conversation[] = dbConversations.map((c: any) => {
-        const brandName = c.brand?.name || 'Partner Brand';
-        const brandAvatar = brandName.slice(0, 2).toUpperCase();
-        const lastMsg = c.messages?.[c.messages.length - 1];
-
-        return {
-          id: c.id,
-          brand: {
-            name: brandName,
-            avatar: brandAvatar,
-          },
-          campaign: {
-            name: c.campaign?.title || 'Collaboration Sprint',
-            id: c.campaign?.id || '',
-          },
-          lastMessage: lastMsg?.messageText || 'Started conversation',
-          time: lastMsg?.createdAt
-            ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : 'Active',
-          unread: 0,
-          status: 'ACTIVE',
-          messages: c.messages || [],
-        };
-      });
-
-      const dbIds = new Set(mappedDb.map((d) => d.id));
-      const extraMocks = MOCK_CONVERSATIONS.filter((m) => !dbIds.has(m.id));
-      const combined = [...mappedDb, ...extraMocks];
-      setConversations(combined);
-
-      // Automatically select conversation passed via URL param
-      if (targetConvId) {
-        const found = combined.find((c) => c.id === targetConvId);
-        if (found) {
-          setActiveConv(found);
-          setMobileChatOpen(true);
-        } else if (combined.length > 0) {
-          setActiveConv(combined[0]);
-        }
-      } else if (combined.length > 0 && (!activeConv || !combined.some((c) => c.id === activeConv.id))) {
-        setActiveConv(combined[0]);
-      }
-    }
-  }, [dbConversations, targetConvId]);
-
-  // 2. Load messages for active conversation
-  const loadActiveMessages = async () => {
+  // 2. Load messages for active conversation and mark as read
+  const loadActiveMessages = async (silent = false) => {
     if (!token || !activeConv) return;
-    // If it's a PostgreSQL conversation ID
-    if (activeConv.id.includes('-')) {
-      try {
-        const res = await fetchApi<{ data: any }>(`/api/conversations/${activeConv.id}`, {}, token);
-        if (res?.data?.messages) {
-          const mapped: Message[] = res.data.messages.map((m: any) => ({
-            id: m.id,
-            senderId: m.senderUserId === user?.id ? 'creator' : 'brand',
-            text: m.messageText,
-            time: m.createdAt
-              ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : 'Just now',
-            type: 'TEXT',
-          }));
-          setMessages(mapped);
+    if (!silent) setLoadingMessages(true);
+
+    try {
+      const res = await fetchApi<{ data: any }>(`/api/conversations/${activeConv.id}`, {}, token);
+      if (res?.data?.messages && Array.isArray(res.data.messages)) {
+        const mapped: MessageItem[] = res.data.messages.map((m: any) => ({
+          id: m.id,
+          senderId: m.senderUserId === user?.id ? 'creator' : 'brand',
+          text: m.messageText || '',
+          time: m.createdAt
+            ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'Just now',
+          createdAt: m.createdAt,
+          type: 'TEXT',
+          attachments: m.attachments || [],
+        }));
+
+        // Attach persisted offers if present
+        if (res.data.offers && Array.isArray(res.data.offers) && res.data.offers.length > 0) {
+          res.data.offers.forEach((offer: any) => {
+            mapped.push({
+              id: `offer_${offer.id}`,
+              senderId: 'brand',
+              text: '',
+              time: offer.createdAt
+                ? new Date(offer.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'Offer',
+              type: 'OFFER',
+              offer: {
+                id: offer.id,
+                amount: Number(offer.amount),
+                deliverables: Array.isArray(offer.deliverables)
+                  ? offer.deliverables
+                  : ['Campaign Deliverable Package'],
+                status: offer.status,
+              },
+            });
+          });
         }
-      } catch (err) {
-        console.warn('[CREATOR_INBOX] Failed to poll messages:', err);
+
+        setMessages(mapped);
+
+        // Mark incoming messages as read in database
+        const hasUnread = res.data.messages.some(
+          (m: any) => m.senderUserId !== user?.id && !m.readAt
+        );
+        if (hasUnread) {
+          markConversationAsReadLocally(activeConv.id);
+          fetchApi(`/api/conversations/${activeConv.id}/read`, { method: 'POST' }, token)
+            .then(() => {
+              // Reset local unread badge count
+              setConversations((prev) =>
+                prev.map((c) => (c.id === activeConv.id ? { ...c, unread: 0 } : c))
+              );
+            })
+            .catch(() => null);
+        }
       }
-    } else {
-      // Mock conversation fallback
-      setMessages(INITIAL_MESSAGES);
+    } catch (err: any) {
+      console.warn('[CREATOR_INBOX] Error loading thread messages:', err);
+    } finally {
+      if (!silent) setLoadingMessages(false);
     }
   };
 
   useEffect(() => {
-    loadActiveMessages();
+    if (activeConv?.id) {
+      loadActiveMessages();
+    } else {
+      setMessages([]);
+    }
   }, [activeConv?.id, token]);
 
-  // 3. Periodic polling (every 3.5 seconds) for live thread updates
+  // 3. Adaptive polling loop for live updates (every 3.5 seconds)
   useEffect(() => {
-    if (!token || !activeConv || !activeConv.id.includes('-')) return;
+    if (!token || !activeConv?.id) return;
+
     const interval = setInterval(() => {
-      loadActiveMessages();
+      loadActiveMessages(true);
     }, 3500);
+
     return () => clearInterval(interval);
   }, [activeConv?.id, token]);
 
-  // 4. Send Message Handler
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const textToSend = inputText.trim();
-    if (!textToSend || sending) return;
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages.length]);
 
-    setInputText('');
+  const ALLOWED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.docx', '.doc', '.txt'];
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-    const optimisticMsg: Message = {
-      id: `msg_${Date.now()}`,
-      senderId: 'creator',
-      text: textToSend,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      type: 'TEXT',
-    };
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    setMessages((prev) => [...prev, optimisticMsg]);
+    if (file.size > MAX_FILE_SIZE) {
+      setSendError('File exceeds 10 MB limit. Please select a smaller file.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
-    // Send to live API if valid database conversation
-    if (token && activeConv.id.includes('-')) {
-      setSending(true);
-      try {
-        await fetchApi(
-          `/api/conversations/${activeConv.id}/messages`,
-          {
-            method: 'POST',
-            body: JSON.stringify({ messageText: textToSend }),
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      setSendError('Unsupported file type. Allowed formats: PDF, PNG, JPEG, WEBP, DOCX, TXT.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setSendError(null);
+    setSelectedFile(file);
+  };
+
+  const removeSelectedFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDownloadAttachment = async (attachment: MessageAttachmentItem) => {
+    if (!token || !activeConv) return;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/conversations/${activeConv.id}/attachments/${attachment.id}/download`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
           },
-          token
-        );
-        loadConversations();
-      } catch (err) {
-        console.warn('[CREATOR_INBOX] Backend message persistence fallback:', err);
-      } finally {
-        setSending(false);
+        }
+      );
+      if (!res.ok) {
+        throw new Error('Failed to download attachment');
       }
-    } else {
-      // Simulate reply for demo mock threads
-      setIsTyping(true);
-      setTimeout(() => {
-        setIsTyping(false);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `msg_${Date.now()}`,
-            senderId: 'brand',
-            text: 'Thanks for the update Alex. The marketing lead will review this by tomorrow morning!',
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            type: 'TEXT',
-          },
-        ]);
-      }, 1800);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.originalFilename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('Download error:', err);
+      setSendError(err.message || 'Unable to download attachment. Please try again.');
     }
   };
 
-  const acceptOffer = (id: string) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === id && m.type === 'OFFER' && m.offer
-          ? { ...m, offer: { ...m.offer, status: 'ACCEPTED' } }
-          : m
-      )
-    );
+  // 4. Send Message Handler (supports text, attachment, or both)
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const textToSend = inputText.trim();
+    if ((!textToSend && !selectedFile) || sending || !activeConv) return;
+
+    setSending(true);
+    setSendError(null);
+
+    try {
+      let bodyData: any;
+      if (selectedFile) {
+        const formData = new FormData();
+        if (textToSend) formData.append('messageText', textToSend);
+        formData.append('file', selectedFile);
+        bodyData = formData;
+      } else {
+        bodyData = JSON.stringify({ messageText: textToSend });
+      }
+
+      const res = await fetchApi<{ data: any }>(
+        `/api/conversations/${activeConv.id}/messages`,
+        {
+          method: 'POST',
+          body: bodyData,
+        },
+        token || undefined
+      );
+
+      if (res?.data) {
+        // Clear input and attachment only on confirmed success
+        setInputText('');
+        setSelectedFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+
+        const newMsg: MessageItem = {
+          id: res.data.id || `msg_${Date.now()}`,
+          senderId: 'creator',
+          text: res.data.messageText || textToSend,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          type: 'TEXT',
+          attachments: res.data.attachments || [],
+        };
+
+        setMessages((prev) => [...prev, newMsg]);
+
+        // Update local lastMessage in conversation list
+        const summary =
+          textToSend ||
+          (res.data.attachments?.[0]
+            ? `📎 ${res.data.attachments[0].originalFilename}`
+            : 'Sent attachment');
+
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === activeConv.id
+              ? {
+                  ...c,
+                  lastMessage: summary,
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                }
+              : c
+          )
+        );
+      }
+    } catch (err: any) {
+      console.error('[CREATOR_INBOX] Send message failed:', err);
+      setSendError(err.message || 'Failed to send message. Please retry.');
+    } finally {
+      setSending(false);
+    }
   };
 
+  // Filter conversations based on search
   const filteredConversations = conversations.filter(
     (c) =>
       searchFilter.trim() === '' ||
@@ -324,8 +415,8 @@ function CreatorInboxContent() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#171717]">
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-5">
-        {/* 1. Page Header */}
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+        {/* 1. Header */}
         <PortalPageHeader
           titlePrefix="Brand"
           highlightText="conversations & offers."
@@ -333,7 +424,7 @@ function CreatorInboxContent() {
 
         {/* 2. Main Two-Pane Chat Container */}
         <div className="bg-white rounded-2xl border border-[#E7E1DA] shadow-xs overflow-hidden h-[720px] flex relative">
-          {/* Left Column: Conversation List (Collapsible / Sliding to Icon-Only) */}
+          {/* Left Column: Conversation List */}
           <aside
             className={`transition-all duration-300 ease-in-out border-r border-[#E7E1DA] flex flex-col shrink-0 bg-white relative ${
               sidebarCollapsed
@@ -341,13 +432,13 @@ function CreatorInboxContent() {
                 : 'w-full md:w-[360px]'
             } ${mobileChatOpen ? 'hidden md:flex' : 'flex'}`}
           >
-            {/* Vertically Centered Seam Toggle Button */}
+            {/* Seam Toggle Button */}
             <button
               type="button"
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               className="hidden md:flex absolute -right-3.5 top-1/2 -translate-y-1/2 z-30 w-7 h-7 rounded-full bg-white border border-[#E7E1DA] hover:border-[#FF6B00] text-[#737373] hover:text-[#FF6B00] shadow-md items-center justify-center transition-all hover:scale-110 cursor-pointer"
-              title={sidebarCollapsed ? "Expand conversations panel" : "Collapse conversations panel"}
-              aria-label={sidebarCollapsed ? "Expand conversations panel" : "Collapse conversations panel"}
+              title={sidebarCollapsed ? 'Expand conversations panel' : 'Collapse conversations panel'}
+              aria-label={sidebarCollapsed ? 'Expand conversations panel' : 'Collapse conversations panel'}
             >
               {sidebarCollapsed ? (
                 <ChevronRight className="w-4 h-4 ml-0.5" />
@@ -371,6 +462,8 @@ function CreatorInboxContent() {
                     <Search className="w-4 h-4 text-[#737373] absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
+                      value={searchFilter}
+                      onChange={(e) => setSearchFilter(e.target.value)}
                       placeholder="Search messages..."
                       className="w-full pl-9 pr-3 py-2 bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] rounded-xl text-xs text-[#171717] placeholder:text-[#737373] focus:outline-none transition"
                     />
@@ -387,239 +480,433 @@ function CreatorInboxContent() {
 
             {/* Conversation Items List */}
             <div className="flex-1 overflow-y-auto divide-y divide-[#E7E1DA]/60 overflow-x-hidden">
-              {conversations.map((conv) => {
-                const isSelected = activeConv.id === conv.id;
-                return (
-                  <div
-                    key={conv.id}
-                    onClick={() => {
-                      setActiveConv(conv);
-                      setMobileChatOpen(true);
-                    }}
-                    title={sidebarCollapsed ? `${conv.brand.name} • ${conv.campaign.name}` : undefined}
-                    className={`cursor-pointer transition-colors relative ${
-                      sidebarCollapsed
-                        ? 'p-3 flex items-center justify-center'
-                        : 'p-4 flex items-start gap-3'
-                    } ${
-                      isSelected ? 'bg-[#FFF4EB]' : 'hover:bg-[#F8F6F2]'
-                    }`}
+              {loadingConversations ? (
+                <div className="p-8 text-center space-y-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#FF6B00] mx-auto" />
+                  <p className="text-xs text-[#737373]">Loading conversations...</p>
+                </div>
+              ) : errorConversations ? (
+                <div className="p-4 text-center space-y-2">
+                  <AlertCircle className="w-5 h-5 text-rose-500 mx-auto" />
+                  <p className="text-xs text-rose-600 font-medium">{errorConversations}</p>
+                  <button
+                    type="button"
+                    onClick={() => loadConversations()}
+                    className="px-3 py-1.5 rounded-lg bg-[#F8F6F2] text-xs font-semibold text-[#171717] hover:bg-[#E7E1DA] inline-flex items-center gap-1.5"
                   >
-                    {/* Active Left Indicator Bar */}
-                    {isSelected && (
-                      <span className="absolute left-0 top-2 bottom-2 w-1 bg-[#FF6B00] rounded-r-md" />
-                    )}
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Retry</span>
+                  </button>
+                </div>
+              ) : filteredConversations.length === 0 ? (
+                <div className="p-6 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#F8F6F2] text-[#737373] flex items-center justify-center mx-auto">
+                    <MessageSquare className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-[#171717]">No conversations found</h4>
+                    <p className="text-[11px] text-[#737373] mt-1">
+                      {conversations.length === 0
+                        ? 'Conversations start when you apply to campaign opportunities or accept brand invitations.'
+                        : 'No conversations matched your search filter.'}
+                    </p>
+                  </div>
+                  {conversations.length === 0 && (
+                    <Link
+                      href="/creator/discover"
+                      className="inline-block px-3 py-1.5 rounded-xl bg-[#FF6B00] text-white text-xs font-bold hover:bg-[#E56000] transition"
+                    >
+                      Discover Opportunities
+                    </Link>
+                  )}
+                </div>
+              ) : (
+                filteredConversations.map((conv) => {
+                  const isSelected = activeConv?.id === conv.id;
+                  return (
+                    <div
+                      key={conv.id}
+                      onClick={() => {
+                        setActiveConv(conv);
+                        setMobileChatOpen(true);
+                      }}
+                      title={sidebarCollapsed ? `${conv.brand.name} • ${conv.campaign.name}` : undefined}
+                      className={`cursor-pointer transition-colors relative ${
+                        sidebarCollapsed
+                          ? 'p-3 flex items-center justify-center'
+                          : 'p-4 flex items-start gap-3'
+                      } ${
+                        isSelected ? 'bg-[#FFF4EB]' : 'hover:bg-[#F8F6F2]'
+                      }`}
+                    >
+                      {/* Active Indicator Bar */}
+                      {isSelected && (
+                        <span className="absolute left-0 top-2 bottom-2 w-1 bg-[#FF6B00] rounded-r-md" />
+                      )}
 
-                    {/* Brand Avatar Icon */}
-                    <div className="relative w-10 h-10 rounded-xl bg-[#171717] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                      {conv.brand.avatar}
-                      {sidebarCollapsed && conv.unread > 0 && (
-                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#FF6B00] ring-2 ring-white" />
+                      {/* Brand Avatar */}
+                      <div className="relative w-10 h-10 rounded-xl bg-[#171717] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                        {conv.brand.avatar}
+                        {sidebarCollapsed && conv.unread > 0 && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#FF6B00] ring-2 ring-white" />
+                        )}
+                      </div>
+
+                      {/* Details */}
+                      {!sidebarCollapsed && (
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold text-xs text-[#171717] truncate">
+                              {conv.brand.name}
+                            </span>
+                            <span className="text-[10px] text-[#737373] shrink-0">
+                              {conv.time}
+                            </span>
+                          </div>
+
+                          <div className="text-[11px] font-semibold text-[#FF6B00] truncate mt-0.5">
+                            {conv.campaign.name}
+                          </div>
+
+                          <p className="text-xs text-[#737373] truncate mt-1">
+                            {conv.lastMessage}
+                          </p>
+                        </div>
+                      )}
+
+                      {!sidebarCollapsed && conv.unread > 0 && (
+                        <span className="w-4 h-4 rounded-full bg-[#FF6B00] text-white text-[9px] font-bold flex items-center justify-center shrink-0 self-center">
+                          {conv.unread}
+                        </span>
                       )}
                     </div>
-
-                    {/* Text Details (Only when expanded) */}
-                    {!sidebarCollapsed && (
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="font-bold text-xs text-[#171717] truncate">
-                            {conv.brand.name}
-                          </span>
-                          <span className="text-[10px] text-[#737373] shrink-0">
-                            {conv.time}
-                          </span>
-                        </div>
-
-                        <div className="text-[11px] font-semibold text-[#FF6B00] truncate mt-0.5">
-                          {conv.campaign.name}
-                        </div>
-
-                        <p className="text-xs text-[#737373] truncate mt-1">
-                          {conv.lastMessage}
-                        </p>
-                      </div>
-                    )}
-
-                    {!sidebarCollapsed && conv.unread > 0 && (
-                      <span className="w-4 h-4 rounded-full bg-[#FF6B00] text-white text-[9px] font-bold flex items-center justify-center shrink-0 self-center">
-                        {conv.unread}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </aside>
 
-          {/* Right Column: Chat View (Responsive Full-Width when Collapsed) */}
-          <section
-            className={`flex-1 flex flex-col h-full bg-[#FAF9F6] transition-all duration-300 ease-in-out ${
-              mobileChatOpen ? 'flex' : 'hidden md:flex'
-            }`}
-          >
-            {/* Chat Top Header */}
-            <div className="h-16 px-6 border-b border-[#E7E1DA] bg-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                {/* Mobile Back Button */}
-                <button
-                  type="button"
-                  onClick={() => setMobileChatOpen(false)}
-                  className="md:hidden p-1.5 rounded-lg hover:bg-[#F8F6F2] text-[#737373]"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-
-                <div className="w-9 h-9 rounded-xl bg-[#171717] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                  {activeConv.brand.avatar}
-                </div>
-
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-sm text-[#171717]">
-                      {activeConv.brand.name}
-                    </h4>
-                    <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Verified Brand
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-[#737373] flex items-center gap-1">
-                    <Briefcase className="w-3 h-3 text-[#FF6B00]" />
-                    <span>{activeConv.campaign.name}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="text-xs text-[#737373] hidden sm:block">
-                Status: <span className="font-semibold text-[#171717]">{activeConv.status}</span>
-              </div>
-            </div>
-
-            {/* Chat Messages Stream */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((msg) => {
-                const isCreator = msg.senderId === 'creator';
-
-                if (msg.type === 'OFFER' && msg.offer) {
-                  return (
-                    <div key={msg.id} className="flex justify-start">
-                      <div className="max-w-md w-full bg-white rounded-2xl p-5 border border-[#FF6B00]/40 shadow-xs space-y-3">
-                        <div className="flex items-center justify-between pb-3 border-b border-[#E7E1DA]">
-                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#FF6B00]">
-                            Official Campaign Offer
-                          </span>
-                          <span className="text-xs text-[#737373]">{msg.time}</span>
-                        </div>
-
-                        <div>
-                          <div className="text-[11px] text-[#737373]">Agreed Compensation</div>
-                          <div className="text-xl font-bold text-[#171717]">
-                            ₹{msg.offer.amount.toLocaleString()}
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <div className="text-xs font-semibold text-[#171717]">
-                            Required Deliverables:
-                          </div>
-                          <ul className="space-y-1">
-                            {msg.offer.deliverables.map((d, i) => (
-                              <li
-                                key={i}
-                                className="text-xs text-[#525252] flex items-center gap-1.5"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                <span>{d}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        {msg.offer.status === 'ACCEPTED' ? (
-                          <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold text-center border border-emerald-200">
-                            ✓ Offer Accepted & Contract Initialized
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => acceptOffer(msg.id)}
-                            className="w-full py-2.5 rounded-xl bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-bold transition shadow-xs cursor-pointer"
-                          >
-                            Accept Offer Terms
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isCreator ? 'justify-end' : 'justify-start'}`}
+          {/* Right Column: Chat View */}
+          {activeConv ? (
+            <section
+              className={`flex-1 flex flex-col h-full bg-[#FAF9F6] transition-all duration-300 ease-in-out ${
+                mobileChatOpen ? 'flex' : 'hidden md:flex'
+              }`}
+            >
+              {/* Top Header */}
+              <div className="h-16 px-6 border-b border-[#E7E1DA] bg-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMobileChatOpen(false)}
+                    className="md:hidden p-1.5 rounded-lg hover:bg-[#F8F6F2] text-[#737373]"
                   >
-                    <div
-                      className={`max-w-md rounded-2xl p-4 shadow-2xs space-y-1 text-xs leading-relaxed ${
-                        isCreator
-                          ? 'bg-[#171717] text-white rounded-tr-xs'
-                          : 'bg-white text-[#171717] border border-[#E7E1DA] rounded-tl-xs'
-                      }`}
-                    >
-                      <p>{msg.text}</p>
-                      <div
-                        className={`text-[10px] text-right ${
-                          isCreator ? 'text-white/60' : 'text-[#737373]'
-                        }`}
-                      >
-                        {msg.time}
-                      </div>
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+
+                  <div className="w-9 h-9 rounded-xl bg-[#171717] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                    {activeConv.brand.avatar}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-sm text-[#171717]">
+                        {activeConv.brand.name}
+                      </h4>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Verified Brand
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-[#737373] flex items-center gap-1">
+                      <Briefcase className="w-3 h-3 text-[#FF6B00]" />
+                      <span>{activeConv.campaign.name}</span>
                     </div>
                   </div>
-                );
-              })}
+                </div>
 
-              {isTyping && (
-                <div className="flex justify-start">
-                  <div className="bg-white rounded-2xl p-3 border border-[#E7E1DA] text-xs text-[#737373] animate-pulse">
-                    {activeConv.brand.name} is typing...
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 text-[11px] text-[#737373]">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Live sync active</span>
+                  </div>
+                  <div className="text-xs text-[#737373] hidden sm:block border-l border-[#E7E1DA] pl-3">
+                    Status: <span className="font-semibold text-[#171717]">{activeConv.status}</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Chat Messages Stream */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {loadingMessages ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="w-6 h-6 animate-spin text-[#FF6B00]" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center space-y-2 p-6">
+                    <div className="w-12 h-12 rounded-2xl bg-[#FFF4EB] text-[#FF6B00] flex items-center justify-center">
+                      <MessageSquare className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-sm text-[#171717]">Conversation Started</h4>
+                    <p className="text-xs text-[#737373] max-w-sm">
+                      Send a message below to start aligning on deliverables, timelines, and collaboration terms.
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((msg) => {
+                    const isCreator = msg.senderId === 'creator';
+
+                    if (msg.type === 'OFFER' && msg.offer) {
+                      return (
+                        <div key={msg.id} className="flex justify-start">
+                          <div className="max-w-md w-full bg-white rounded-2xl p-5 border border-[#FF6B00]/40 shadow-xs space-y-3">
+                            <div className="flex items-center justify-between pb-3 border-b border-[#E7E1DA]">
+                              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#FF6B00]">
+                                Campaign Collaboration Offer
+                              </span>
+                              <span className="text-xs text-[#737373]">{msg.time}</span>
+                            </div>
+
+                            <div>
+                              <div className="text-[11px] text-[#737373]">Agreed Compensation</div>
+                              <div className="text-xl font-bold text-[#171717]">
+                                ₹{msg.offer.amount.toLocaleString()}
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <div className="text-xs font-semibold text-[#171717]">
+                                Required Deliverables:
+                              </div>
+                              <ul className="space-y-1">
+                                {msg.offer.deliverables.map((d, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-xs text-[#525252] flex items-center gap-1.5"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span>{d}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+
+                            {msg.offer.status === 'ACCEPTED' ? (
+                              <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold text-center border border-emerald-200">
+                                ✓ Offer Accepted & Contract Initialized
+                              </div>
+                            ) : (
+                              <div className="p-2.5 rounded-xl bg-[#FFF4EB] text-[#FF6B00] text-xs font-bold text-center border border-[#FF6B00]/20">
+                                Pending Terms Agreement
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex ${isCreator ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-md rounded-2xl p-4 shadow-2xs space-y-2 text-xs leading-relaxed ${
+                            isCreator
+                              ? 'bg-[#171717] text-white rounded-tr-xs'
+                              : 'bg-white text-[#171717] border border-[#E7E1DA] rounded-tl-xs'
+                          }`}
+                        >
+                          {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
+
+                          {/* Message Attachments */}
+                          {msg.attachments && msg.attachments.length > 0 && (
+                            <div className="space-y-1.5 pt-0.5">
+                              {msg.attachments.map((att) => {
+                                const isImg = att.mimeType.startsWith('image/');
+                                return (
+                                  <div
+                                    key={att.id}
+                                    className={`rounded-xl p-2.5 flex items-center justify-between gap-3 border transition ${
+                                      isCreator
+                                        ? 'bg-white/10 border-white/20 text-white'
+                                        : 'bg-[#F8F6F2] border-[#E7E1DA] text-[#171717]'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <div
+                                        className={`p-2 rounded-lg shrink-0 ${
+                                          isCreator
+                                            ? 'bg-white/20 text-white'
+                                            : 'bg-white border border-[#E7E1DA] text-[#FF6B00]'
+                                        }`}
+                                      >
+                                        {isImg ? (
+                                          <ImageIcon className="w-4 h-4" />
+                                        ) : (
+                                          <FileText className="w-4 h-4" />
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-semibold truncate leading-tight">
+                                          {att.originalFilename}
+                                        </p>
+                                        <p
+                                          className={`text-[10px] ${
+                                            isCreator ? 'text-white/70' : 'text-[#737373]'
+                                          }`}
+                                        >
+                                          {formatFileSize(att.fileSize)}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadAttachment(att)}
+                                      className={`p-1.5 rounded-lg text-xs font-medium transition cursor-pointer shrink-0 ${
+                                        isCreator
+                                          ? 'hover:bg-white/20 text-white'
+                                          : 'hover:bg-[#E7E1DA] text-[#171717]'
+                                      }`}
+                                      title={`Download ${att.originalFilename}`}
+                                    >
+                                      <Download className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          <div
+                            className={`text-[10px] text-right ${
+                              isCreator ? 'text-white/60' : 'text-[#737373]'
+                            }`}
+                          >
+                            {msg.time}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Composer */}
+              <div className="p-4 bg-white border-t border-[#E7E1DA] space-y-2">
+                {sendError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between">
+                    <span>{sendError}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSendError(null)}
+                      className="text-xs font-bold hover:underline ml-2"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
+                {/* Selected File Preview */}
+                {selectedFile && (
+                  <div className="flex items-center justify-between px-3 py-2 bg-[#FFF4EB] border border-[#FF6B00]/30 rounded-xl text-xs text-[#171717]">
+                    <div className="flex items-center gap-2 truncate">
+                      <Paperclip className="w-3.5 h-3.5 text-[#FF6B00] shrink-0" />
+                      <span className="font-semibold truncate">{selectedFile.name}</span>
+                      <span className="text-[11px] text-[#737373] shrink-0">
+                        ({formatFileSize(selectedFile.size)})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeSelectedFile}
+                      className="p-1 hover:bg-[#FF6B00]/10 rounded-md text-[#737373] hover:text-[#171717] transition ml-2 cursor-pointer"
+                      title="Remove attachment"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                <form
+                  onSubmit={handleSendMessage}
+                  className="flex items-center gap-2.5"
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.doc,.txt"
+                    className="hidden"
+                    id="creator-file-input"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending}
+                    className={`p-2 rounded-xl transition cursor-pointer ${
+                      selectedFile
+                        ? 'bg-[#FFF4EB] text-[#FF6B00]'
+                        : 'text-[#737373] hover:text-[#171717] hover:bg-[#F8F6F2]'
+                    }`}
+                    title="Attach file (PDF, PNG, JPG, DOCX, TXT - max 10MB)"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+
+                  <input
+                    type="text"
+                    placeholder={selectedFile ? "Add an optional note with attachment..." : "Type your reply or proposal..."}
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    disabled={sending}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] text-xs text-[#171717] placeholder:text-[#737373] focus:outline-none transition disabled:opacity-60"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={(!inputText.trim() && !selectedFile) || sending}
+                    className={`p-2.5 rounded-xl font-bold transition shadow-xs ${
+                      (inputText.trim() || selectedFile) && !sending
+                        ? 'bg-[#FF6B00] hover:bg-[#e05e00] text-white cursor-pointer'
+                        : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                    }`}
+                    title={sending ? 'Sending...' : 'Send message'}
+                  >
+                    {sending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                  </button>
+                </form>
+              </div>
+            </section>
+          ) : (
+            <div className="flex-1 hidden md:flex flex-col items-center justify-center p-8 text-center bg-[#FAF9F6]">
+              <div className="w-16 h-16 rounded-2xl bg-white border border-[#E7E1DA] flex items-center justify-center text-[#737373] shadow-xs mb-4">
+                <MessageSquare className="w-8 h-8 text-[#FF6B00]" />
+              </div>
+              <h3 className="text-base font-bold text-[#171717]">
+                {conversations.length === 0 ? 'Your Inbox is empty' : 'Select a conversation'}
+              </h3>
+              <p className="text-xs text-[#737373] max-w-sm mt-1">
+                {conversations.length === 0
+                  ? 'Active discussions with partner brands will appear here once you apply to campaigns or accept incoming collaboration invitations.'
+                  : 'Choose a thread from the list on the left to review messages and coordinate deliverables.'}
+              </p>
+              {conversations.length === 0 && (
+                <Link
+                  href="/creator/discover"
+                  className="mt-4 px-4 py-2 rounded-xl bg-[#FF6B00] text-white text-xs font-bold hover:bg-[#E56000] transition shadow-xs"
+                >
+                  Explore Opportunities
+                </Link>
               )}
             </div>
-
-            {/* Chat Composer */}
-            <form
-              onSubmit={handleSendMessage}
-              className="p-4 bg-white border-t border-[#E7E1DA] flex items-center gap-2.5"
-            >
-              <button
-                type="button"
-                className="p-2 rounded-xl text-[#737373] hover:text-[#171717] hover:bg-[#F8F6F2] transition"
-                title="Attach file"
-              >
-                <Paperclip className="w-4 h-4" />
-              </button>
-
-              <input
-                type="text"
-                placeholder="Type your reply or proposal..."
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-[#F8F6F2] border border-[#E7E1DA] focus:border-[#FF6B00] text-xs text-[#171717] placeholder:text-[#737373] focus:outline-none transition"
-              />
-
-              <button
-                type="submit"
-                disabled={!inputText.trim()}
-                className={`p-2.5 rounded-xl font-bold transition shadow-xs ${
-                  inputText.trim()
-                    ? 'bg-[#FF6B00] hover:bg-[#e05e00] text-white cursor-pointer'
-                    : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                }`}
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </form>
-          </section>
+          )}
         </div>
       </main>
     </div>

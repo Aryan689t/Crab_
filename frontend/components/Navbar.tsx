@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { useAuth } from '../lib/auth-context';
 import { usePathname } from 'next/navigation';
 import { LogOut, User, Building2, Sparkles, LayoutDashboard, MessageSquare, Briefcase, FileText, Search, Compass, Settings } from 'lucide-react';
+import { NotificationBell } from './notifications/NotificationBell';
+import { useMessageNotifications } from '../lib/notification-context';
 
 export function Navbar() {
   const { user, logout } = useAuth();
+  const { unreadCount } = useMessageNotifications();
   const pathname = usePathname();
 
   const brandNav = [
@@ -55,6 +58,9 @@ export function Navbar() {
         <div className="flex items-center space-x-4">
           {user ? (
             <>
+              {/* In-App Message Notifications */}
+              <NotificationBell />
+
               <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-[#F3F3FC] border border-[#E7E8F0]">
                 {user.role === 'CREATOR' ? (
                   <User className="w-3.5 h-3.5 text-[#8580E8]" />
@@ -105,6 +111,7 @@ export function Navbar() {
             const accentColor = user.role === 'CREATOR' ? 'text-[#8580E8]' : 'text-[#F4511E]';
             const bgHover = user.role === 'CREATOR' ? 'hover:bg-[#F3F3FC]' : 'hover:bg-[#FFF5F2]';
             const activeBg = user.role === 'CREATOR' ? 'bg-[#F3F3FC]' : 'bg-[#FFF5F2]';
+            const isInbox = link.name === 'Inbox';
 
             return (
               <Link
@@ -115,6 +122,11 @@ export function Navbar() {
               >
                 <Icon className="w-3.5 h-3.5" />
                 <span>{link.name}</span>
+                {isInbox && unreadCount > 0 && (
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full bg-[#FF6B00] text-white text-[10px] font-bold">
+                    {unreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}

@@ -541,22 +541,65 @@ export async function updateApplicationStatus(req: Request, res: Response, next:
         });
 
         // Ensure collaboration exists without duplicate creations
-        const existingCollab = await tx.collaboration.findFirst({
+        let collab = await tx.collaboration.findFirst({
           where: {
             creatorId: app.creatorId,
             campaignId: app.campaignId,
           },
         });
 
-        if (!existingCollab) {
-          await tx.collaboration.create({
+        if (!collab) {
+          collab = await tx.collaboration.create({
             data: {
               creatorId: app.creatorId,
               brandId: application.campaign.brand.id,
               campaignId: app.campaignId,
               agreedAmount: app.proposedRate || undefined,
-              status: 'PROPOSED',
+              status: 'AGREED',
             },
+          });
+        } else if (collab.status === 'PROPOSED') {
+          collab = await tx.collaboration.update({
+            where: { id: collab.id },
+            data: { status: 'AGREED' },
+          });
+        }
+
+        // Ensure conversation exists and is linked
+        let conv = await tx.conversation.findFirst({
+          where: {
+            creatorId: app.creatorId,
+            brandId: application.campaign.brand.id,
+            campaignId: app.campaignId,
+          },
+        });
+
+        if (!conv) {
+          conv = await tx.conversation.create({
+            data: {
+              creatorId: app.creatorId,
+              brandId: application.campaign.brand.id,
+              campaignId: app.campaignId,
+              collaborationId: collab.id,
+            },
+          });
+
+          // Post initial welcome acceptance message
+          await tx.message.create({
+            data: {
+              conversationId: conv.id,
+              senderUserId: req.user!.id,
+              messageText:
+                parsed.brandNote ||
+                `Congratulations ${app.creator.displayName}! Your application for "${application.campaign.title}" has been accepted. Let's align on deliverables and timelines here.`,
+            },
+          });
+        }
+
+        if (!collab.conversationId) {
+          await tx.collaboration.update({
+            where: { id: collab.id },
+            data: { conversationId: conv.id },
           });
         }
 

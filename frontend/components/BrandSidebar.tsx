@@ -16,6 +16,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
+import { useMessageNotifications } from '../lib/notification-context';
 import { Sidebar, SidebarBody } from './ui/sidebar';
 
 interface BrandSidebarProps {
@@ -26,6 +27,7 @@ interface BrandSidebarProps {
 export function BrandSidebar({ isOpen, setIsOpen }: BrandSidebarProps) {
   const pathname = usePathname();
   const { logout } = useAuth();
+  const { unreadCount } = useMessageNotifications();
 
   const navItems = [
     { label: 'Overview', href: '/brand/dashboard', icon: Home },
@@ -33,7 +35,12 @@ export function BrandSidebar({ isOpen, setIsOpen }: BrandSidebarProps) {
     { label: 'Find Creators', href: '/brand/creators', icon: Search },
     { label: 'Applications', href: '/brand/applications', icon: FileText, badge: '5' },
     { label: 'Collaborations', href: '/brand/collaborations', icon: Users },
-    { label: 'Inbox', href: '/brand/inbox', icon: MessageSquare, badge: '2' },
+    {
+      label: 'Inbox',
+      href: '/brand/inbox',
+      icon: MessageSquare,
+      badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : String(unreadCount)) : undefined,
+    },
     { label: 'Intelligence', href: '/brand/intelligence', icon: Sparkles },
   ];
 
