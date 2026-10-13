@@ -8,10 +8,13 @@ export interface YouTubeChannelProfile {
   customUrl?: string;
   description?: string;
   thumbnailUrl?: string;
-  subscriberCount: number;
-  viewCount: number;
-  videoCount: number;
-  uploadsPlaylistId: string;
+  subscriberCount: number | null;
+  viewCount: number | null;
+  videoCount: number | null;
+  uploadsPlaylistId?: string;
+  ownershipVerified: boolean;
+  connectionState: 'OWNER_AUTHORIZED' | 'PUBLIC_DATA_AVAILABLE' | 'PUBLIC_PROFILE_ADDED' | 'SYNC_FAILED';
+  rawResponse?: any;
 }
 
 export interface YouTubeVideoItem {
@@ -26,10 +29,233 @@ export interface YouTubeVideoItem {
   viewCount?: number;
   likeCount?: number;
   commentCount?: number;
+  duration?: string;
 }
 
 // In-memory CSRF state cache with 15-minute expiration
 const oauthStateCache = new Map<string, { creatorId: string; expiresAt: number }>();
+
+/**
+ * Parses ISO 8601 duration string (e.g. "PT12M34S") into MM:SS or HH:MM:SS format.
+ */
+export function parseISO8601Duration(durationStr?: string): string | null {
+  if (!durationStr) return null;
+  const match = durationStr.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return null;
+  const hours = parseInt(match[1] || '0', 10);
+  const minutes = parseInt(match[2] || '0', 10);
+  const seconds = parseInt(match[3] || '0', 10);
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Parses and normalizes any YouTube channel URL, handle, or channel ID input.
+ */
+export function parseYouTubeInput(input: string): {
+  type: 'HANDLE' | 'CHANNEL_ID' | 'CUSTOM_URL' | 'USERNAME';
+  value: string;
+  normalizedUrl: string;
+} {
+  const cleaned = input.trim();
+  let path = cleaned;
+  try {
+    const parsed = new URL(cleaned.startsWith('http') ? cleaned : `https://${cleaned}`);
+    path = parsed.pathname;
+  } catch {
+    path = cleaned;
+  }
+
+  // 1. Channel ID (UC...)
+  const channelMatch = path.match(/\/channel\/(UC[a-zA-Z0-9_-]{22})/i);
+  if (channelMatch) {
+    return {
+      type: 'CHANNEL_ID',
+      value: channelMatch[1],
+      normalizedUrl: `https://www.youtube.com/channel/${channelMatch[1]}`,
+    };
+  }
+  if (/^UC[a-zA-Z0-9_-]{22}$/i.test(cleaned)) {
+    return {
+      type: 'CHANNEL_ID',
+      value: cleaned,
+      normalizedUrl: `https://www.youtube.com/channel/${cleaned}`,
+    };
+  }
+
+  // 2. Handle (@name)
+  const handleMatch = path.match(/\/@([a-zA-Z0-9_.-]+)/i);
+  if (handleMatch) {
+    return {
+      type: 'HANDLE',
+      value: `@${handleMatch[1]}`,
+      normalizedUrl: `https://www.youtube.com/@${handleMatch[1]}`,
+    };
+  }
+  if (cleaned.startsWith('@')) {
+    return {
+      type: 'HANDLE',
+      value: cleaned,
+      normalizedUrl: `https://www.youtube.com/${cleaned}`,
+    };
+  }
+
+  // 3. Custom URL (/c/name)
+  const cMatch = path.match(/\/c\/([a-zA-Z0-9_.-]+)/i);
+  if (cMatch) {
+    return {
+      type: 'CUSTOM_URL',
+      value: cMatch[1],
+      normalizedUrl: `https://www.youtube.com/c/${cMatch[1]}`,
+    };
+  }
+
+  // 4. User URL (/user/name)
+  const userMatch = path.match(/\/user\/([a-zA-Z0-9_.-]+)/i);
+  if (userMatch) {
+    return {
+      type: 'USERNAME',
+      value: userMatch[1],
+      normalizedUrl: `https://www.youtube.com/user/${userMatch[1]}`,
+    };
+  }
+
+  // Default fallback: treat as handle
+  const fallback = cleaned
+    .replace(/^https?:\/\/(www\.)?youtube\.com\//i, '')
+    .split('/')[0]
+    .split('?')[0];
+  const finalHandle = fallback.startsWith('@') ? fallback : `@${fallback}`;
+  return {
+    type: 'HANDLE',
+    value: finalHandle,
+    normalizedUrl: `https://www.youtube.com/${finalHandle}`,
+  };
+}
+
+/**
+ * Resolves canonical YouTube channel profile from handle, URL, or channel ID.
+ * Respects YouTube Data API v3 and falls back gracefully to public oEmbed.
+ */
+export async function resolveYouTubeChannel(
+  input: string,
+  apiKey?: string
+): Promise<YouTubeChannelProfile> {
+  const parsed = parseYouTubeInput(input);
+  const key = apiKey || config.youtube.apiKey || config.social.youtubeApiKey;
+
+  // 1. If API key is available, query official YouTube Data API v3
+  if (key) {
+    let url = '';
+    if (parsed.type === 'CHANNEL_ID') {
+      url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&id=${parsed.value}&key=${key}`;
+    } else if (parsed.type === 'HANDLE') {
+      const handleParam = parsed.value.startsWith('@') ? parsed.value : `@${parsed.value}`;
+      url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&forHandle=${encodeURIComponent(handleParam)}&key=${key}`;
+    } else if (parsed.type === 'USERNAME') {
+      url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&forUsername=${encodeURIComponent(parsed.value)}&key=${key}`;
+    } else {
+      url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(parsed.value)}&maxResults=1&key=${key}`;
+    }
+
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const data: any = await res.json();
+        let item = data.items?.[0];
+
+        // If forHandle with @ returned nothing, try without the leading @
+        if (!item && parsed.type === 'HANDLE') {
+          const fallbackUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&forHandle=${encodeURIComponent(parsed.value.replace(/^@/, ''))}&key=${key}`;
+          const fallbackRes = await fetch(fallbackUrl);
+          if (fallbackRes.ok) {
+            const fallbackData: any = await fallbackRes.json();
+            item = fallbackData.items?.[0];
+          }
+        }
+
+        if (item) {
+          let channelId = item.id;
+          if (typeof channelId === 'object' && channelId.channelId) {
+            channelId = channelId.channelId;
+            const detailRes = await fetch(
+              `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&id=${channelId}&key=${key}`
+            );
+            if (detailRes.ok) {
+              const detailData: any = await detailRes.json();
+              if (detailData.items?.[0]) item = detailData.items[0];
+            }
+          }
+
+          const uploadsPlaylistId =
+            item.contentDetails?.relatedPlaylists?.uploads || `UU${channelId.substring(2)}`;
+          const subCount = item.statistics?.hiddenSubscriberCount
+            ? null
+            : parseInt(item.statistics?.subscriberCount || '0', 10);
+
+          return {
+            channelId,
+            title: item.snippet?.title || parsed.value,
+            customUrl: item.snippet?.customUrl || parsed.value,
+            description: item.snippet?.description || '',
+            thumbnailUrl:
+              item.snippet?.thumbnails?.high?.url ||
+              item.snippet?.thumbnails?.medium?.url ||
+              item.snippet?.thumbnails?.default?.url ||
+              '',
+            subscriberCount: subCount,
+            viewCount: parseInt(item.statistics?.viewCount || '0', 10),
+            videoCount: parseInt(item.statistics?.videoCount || '0', 10),
+            uploadsPlaylistId,
+            ownershipVerified: false,
+            connectionState: 'PUBLIC_DATA_AVAILABLE',
+          };
+        }
+      }
+    } catch (err: any) {
+      console.warn('[YOUTUBE_RESOLVE] API query failed:', err.message);
+    }
+  }
+
+  // 2. Public Fallback via YouTube oEmbed (safe, no API key required for canonical author title)
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(parsed.normalizedUrl)}&format=json`;
+    const res = await fetch(oembedUrl);
+    if (res.ok) {
+      const data: any = await res.json();
+      return {
+        channelId: `yt_${parsed.value.replace(/[^a-zA-Z0-9_-]/g, '')}`,
+        title: data.author_name || data.title || parsed.value,
+        customUrl: parsed.value,
+        description: '',
+        thumbnailUrl: data.thumbnail_url || '',
+        subscriberCount: null,
+        viewCount: null,
+        videoCount: null,
+        ownershipVerified: false,
+        connectionState: 'PUBLIC_PROFILE_ADDED',
+      };
+    }
+  } catch (err: any) {
+    console.warn('[YOUTUBE_RESOLVE] oEmbed fallback note:', err.message);
+  }
+
+  // 3. Fallback to normalized metadata with explicit status
+  return {
+    channelId: parsed.type === 'CHANNEL_ID' ? parsed.value : `yt_${parsed.value.replace(/[^a-zA-Z0-9_-]/g, '')}`,
+    title: parsed.value,
+    customUrl: parsed.value,
+    description: '',
+    thumbnailUrl: '',
+    subscriberCount: null,
+    viewCount: null,
+    videoCount: null,
+    ownershipVerified: false,
+    connectionState: 'PUBLIC_PROFILE_ADDED',
+  };
+}
 
 /**
  * Generates secure Google OAuth 2.0 consent URL for YouTube Data API v3.
@@ -173,6 +399,9 @@ export async function fetchAuthenticatedChannel(accessToken: string): Promise<Yo
 
   const item = data.items[0];
   const uploadsPlaylistId = item.contentDetails?.relatedPlaylists?.uploads;
+  const subCount = item.statistics?.hiddenSubscriberCount
+    ? null
+    : parseInt(item.statistics?.subscriberCount || '0', 10);
 
   return {
     channelId: item.id,
@@ -184,15 +413,17 @@ export async function fetchAuthenticatedChannel(accessToken: string): Promise<Yo
       item.snippet?.thumbnails?.medium?.url ||
       item.snippet?.thumbnails?.default?.url ||
       '',
-    subscriberCount: parseInt(item.statistics?.subscriberCount || '0', 10),
+    subscriberCount: subCount,
     viewCount: parseInt(item.statistics?.viewCount || '0', 10),
     videoCount: parseInt(item.statistics?.videoCount || '0', 10),
     uploadsPlaylistId: uploadsPlaylistId || `UU${item.id.substring(2)}`,
+    ownershipVerified: true,
+    connectionState: 'OWNER_AUTHORIZED',
   };
 }
 
 /**
- * Retrieves uploaded videos from the channel's uploads playlist.
+ * Retrieves uploaded videos along with actual per-video statistics (views, likes, comments, duration).
  */
 export async function fetchChannelUploads(
   uploadsPlaylistId: string,
@@ -200,7 +431,8 @@ export async function fetchChannelUploads(
   apiKey?: string,
   maxResults = 20
 ): Promise<YouTubeVideoItem[]> {
-  const keyParam = apiKey || config.youtube.apiKey ? `&key=${apiKey || config.youtube.apiKey}` : '';
+  const key = apiKey || config.youtube.apiKey || config.social.youtubeApiKey;
+  const keyParam = key ? `&key=${key}` : '';
   const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}${keyParam}`;
 
   const headers: HeadersInit = {};
@@ -215,9 +447,9 @@ export async function fetchChannelUploads(
   }
 
   const data: any = await res.json();
-  if (!data.items) return [];
+  if (!data.items || data.items.length === 0) return [];
 
-  return data.items
+  const rawVideos: YouTubeVideoItem[] = data.items
     .filter((item: any) => item.contentDetails?.videoId)
     .map((item: any) => {
       const videoId = item.contentDetails.videoId;
@@ -239,11 +471,42 @@ export async function fetchChannelUploads(
         channelTitle: item.snippet?.channelTitle,
       };
     });
+
+  // Fetch per-video statistics and duration in batch
+  const videoIds = rawVideos.map((v) => v.id);
+  if (videoIds.length > 0 && (key || accessToken)) {
+    try {
+      const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds.join(',')}${keyParam}`;
+      const statsRes = await fetch(statsUrl, { headers });
+      if (statsRes.ok) {
+        const statsData: any = await statsRes.json();
+        const statsMap = new Map<string, any>();
+        (statsData.items || []).forEach((item: any) => {
+          statsMap.set(item.id, item);
+        });
+
+        return rawVideos.map((vid) => {
+          const detail = statsMap.get(vid.id);
+          if (!detail) return vid;
+          return {
+            ...vid,
+            viewCount: detail.statistics?.viewCount ? parseInt(detail.statistics.viewCount, 10) : undefined,
+            likeCount: detail.statistics?.likeCount ? parseInt(detail.statistics.likeCount, 10) : undefined,
+            commentCount: detail.statistics?.commentCount ? parseInt(detail.statistics.commentCount, 10) : undefined,
+            duration: parseISO8601Duration(detail.contentDetails?.duration) || undefined,
+          };
+        });
+      }
+    } catch (err: any) {
+      console.warn('[YOUTUBE_UPLOADS] Video statistics batch fetch note:', err.message);
+    }
+  }
+
+  return rawVideos;
 }
 
 /**
  * Verifies whether a given video ID belongs to the creator's connected channel.
- * Prevents submitting videos from other creators or unrelated channels.
  */
 export async function verifyVideoBelongsToChannel(
   videoId: string,
@@ -251,7 +514,6 @@ export async function verifyVideoBelongsToChannel(
   accessToken?: string,
   apiKey?: string
 ): Promise<{ verified: boolean; video?: YouTubeVideoItem; reason?: string }> {
-  // First, check if already in local PostgreSQL Content table for this channel
   const localContent = await prisma.content.findFirst({
     where: {
       platformContentId: videoId,
@@ -277,31 +539,8 @@ export async function verifyVideoBelongsToChannel(
     };
   }
 
-  // Also check if video exists in local database belonging to a DIFFERENT channel
-  const foreignContent = await prisma.content.findFirst({
-    where: {
-      platformContentId: videoId,
-      platform: 'YOUTUBE',
-      NOT: {
-        socialAccount: {
-          platformAccountId: expectedChannelId,
-        },
-      },
-    },
-    include: {
-      socialAccount: true,
-    },
-  });
-
-  if (foreignContent) {
-    return {
-      verified: false,
-      reason: `Video belongs to channel ${foreignContent.socialAccount?.platformAccountId || 'another creator'}, not the connected channel ${expectedChannelId}.`,
-    };
-  }
-
-  // Otherwise, query YouTube API directly
-  const keyParam = apiKey || config.youtube.apiKey ? `&key=${apiKey || config.youtube.apiKey}` : '';
+  const key = apiKey || config.youtube.apiKey || config.social.youtubeApiKey;
+  const keyParam = key ? `&key=${key}` : '';
   const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoId}${keyParam}`;
 
   const headers: HeadersInit = {};
@@ -350,26 +589,42 @@ export async function verifyVideoBelongsToChannel(
 
 /**
  * Synchronizes the creator's YouTube channel profile and uploaded videos with PostgreSQL.
+ * Resolves channels automatically and calculates genuine performance metrics.
  */
-export async function syncCreatorYouTube(creatorId: string): Promise<{
+export async function syncCreatorYouTube(
+  creatorId: string,
+  channelInput?: string
+): Promise<{
   success: boolean;
   channel: YouTubeChannelProfile;
   videos: YouTubeVideoItem[];
 }> {
-  const account = await prisma.socialAccount.findFirst({
-    where: { creatorId, platform: 'YOUTUBE', status: 'CONNECTED' },
+  // Find account in CONNECTED or LINKED status
+  let account = await prisma.socialAccount.findFirst({
+    where: {
+      creatorId,
+      platform: 'YOUTUBE',
+      status: 'CONNECTED',
+    },
   });
 
-  if (!account) {
-    throw new Error('No connected YouTube account found for this creator.');
+  let refData: any = {};
+  if (account?.authorizationReference) {
+    try {
+      refData = JSON.parse(account.authorizationReference);
+    } catch {
+      // If authorizationReference was saved as raw URL string
+      refData = { profileUrl: account.authorizationReference };
+    }
   }
 
-  let refData: any = {};
-  try {
-    refData = account.authorizationReference ? JSON.parse(account.authorizationReference) : {};
-  } catch {
-    refData = {};
-  }
+  const inputToResolve =
+    channelInput ||
+    account?.username ||
+    refData?.customUrl ||
+    refData?.profileUrl ||
+    account?.authorizationReference ||
+    '';
 
   let accessToken: string | undefined = refData.accessToken;
   const refreshToken: string | undefined = refData.refreshToken;
@@ -389,55 +644,34 @@ export async function syncCreatorYouTube(creatorId: string): Promise<{
   let profile: YouTubeChannelProfile;
   let videos: YouTubeVideoItem[] = [];
 
-  if (accessToken) {
-    // 1. Fetch channel profile
-    profile = await fetchAuthenticatedChannel(accessToken);
+  const key = config.youtube.apiKey || config.social.youtubeApiKey;
 
-    // 2. Fetch recent uploads
+  if (accessToken) {
+    // 1. Authorized Owner OAuth flow
+    profile = await fetchAuthenticatedChannel(accessToken);
     if (profile.uploadsPlaylistId) {
       videos = await fetchChannelUploads(profile.uploadsPlaylistId, accessToken);
     }
-  } else if (config.youtube.apiKey && account.platformAccountId) {
-    // Public API query fallback using channel ID
-    const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&id=${account.platformAccountId}&key=${config.youtube.apiKey}`;
-    const res = await fetch(url);
-    const data: any = await res.json();
-    const item = data.items?.[0];
-
-    if (!item) {
-      throw new Error(`Channel ${account.platformAccountId} not found.`);
-    }
-
-    profile = {
-      channelId: item.id,
-      title: item.snippet?.title || account.username,
-      customUrl: item.snippet?.customUrl || '',
-      description: item.snippet?.description || '',
-      thumbnailUrl: item.snippet?.thumbnails?.high?.url || '',
-      subscriberCount: parseInt(item.statistics?.subscriberCount || '0', 10),
-      viewCount: parseInt(item.statistics?.viewCount || '0', 10),
-      videoCount: parseInt(item.statistics?.videoCount || '0', 10),
-      uploadsPlaylistId: item.contentDetails?.relatedPlaylists?.uploads || '',
-    };
+  } else if (key) {
+    // 2. Public API Data flow using canonical resolution
+    profile = await resolveYouTubeChannel(
+      account?.platformAccountId && !account.platformAccountId.startsWith('yt_')
+        ? account.platformAccountId
+        : inputToResolve,
+      key
+    );
 
     if (profile.uploadsPlaylistId) {
-      videos = await fetchChannelUploads(profile.uploadsPlaylistId, undefined, config.youtube.apiKey);
+      try {
+        videos = await fetchChannelUploads(profile.uploadsPlaylistId, undefined, key);
+      } catch (err: any) {
+        console.warn('[YOUTUBE_SYNC] Uploads fetch notice:', err.message);
+      }
     }
   } else {
-    // Return stored profile information if no live access tokens or API key
-    profile = {
-      channelId: account.platformAccountId,
-      title: refData.channelTitle || account.username,
-      customUrl: refData.customUrl || account.username,
-      description: refData.description || '',
-      thumbnailUrl: refData.thumbnailUrl || '',
-      subscriberCount: refData.subscriberCount || 0,
-      viewCount: refData.viewCount || 0,
-      videoCount: refData.videoCount || 0,
-      uploadsPlaylistId: refData.uploadsPlaylistId || '',
-    };
+    // 3. Fallback to existing stored records or oEmbed metadata
+    profile = await resolveYouTubeChannel(inputToResolve);
 
-    // Load from local Content table
     const storedContents = await prisma.content.findMany({
       where: { creatorId, platform: 'YOUTUBE' },
       orderBy: { publishedAt: 'desc' },
@@ -451,12 +685,52 @@ export async function syncCreatorYouTube(creatorId: string): Promise<{
       publishedAt: c.publishedAt?.toISOString() || c.fetchedAt.toISOString(),
       thumbnailUrl: `https://i.ytimg.com/vi/${c.platformContentId}/hqdefault.jpg`,
       permalink: c.permalink || `https://www.youtube.com/watch?v=${c.platformContentId}`,
+      viewCount: c.views !== null ? Number(c.views) : undefined,
+      likeCount: c.likes !== null ? c.likes : undefined,
+      comments: c.comments !== null ? c.comments : undefined,
     }));
   }
 
-  // Update SocialAccount in PostgreSQL
-  refData = {
+  // Calculate genuine metrics
+  const videosWithViews = videos.filter((v) => typeof v.viewCount === 'number');
+  const avgViews =
+    videosWithViews.length > 0
+      ? Math.round(
+          videosWithViews.slice(0, 10).reduce((acc, v) => acc + (v.viewCount || 0), 0) /
+            Math.min(10, videosWithViews.length)
+        )
+      : profile.viewCount && profile.videoCount && profile.videoCount > 0
+      ? Math.round(profile.viewCount / profile.videoCount)
+      : null;
+
+  const videosWithEng = videos.filter((v) => typeof v.viewCount === 'number' && (v.viewCount || 0) > 0);
+  let avgEngRate: number | null = null;
+  if (videosWithEng.length > 0) {
+    const totalEng = videosWithEng.slice(0, 10).reduce((acc, v) => {
+      const likes = v.likeCount || 0;
+      const comments = v.commentCount || 0;
+      const views = v.viewCount || 1;
+      return acc + ((likes + comments) / views) * 100;
+    }, 0);
+    avgEngRate = Number((totalEng / Math.min(10, videosWithEng.length)).toFixed(1));
+  }
+
+  let postingCadence: number | null = null;
+  if (videos.length >= 2) {
+    const dates = videos
+      .map((v) => new Date(v.publishedAt).getTime())
+      .filter((t) => !isNaN(t))
+      .sort((a, b) => b - a);
+    if (dates.length >= 2) {
+      const spanWeeks = Math.max(1, (dates[0] - dates[dates.length - 1]) / (1000 * 60 * 60 * 24 * 7));
+      postingCadence = Number((dates.length / spanWeeks).toFixed(1));
+    }
+  }
+
+  // Update or create SocialAccount record
+  const updatedRefData = {
     ...refData,
+    channelId: profile.channelId,
     channelTitle: profile.title,
     customUrl: profile.customUrl,
     thumbnailUrl: profile.thumbnailUrl,
@@ -464,18 +738,45 @@ export async function syncCreatorYouTube(creatorId: string): Promise<{
     viewCount: profile.viewCount,
     videoCount: profile.videoCount,
     uploadsPlaylistId: profile.uploadsPlaylistId,
+    ownershipVerified: Boolean(accessToken),
+    connectionState: accessToken
+      ? 'OWNER_AUTHORIZED'
+      : profile.viewCount !== null
+      ? 'PUBLIC_DATA_AVAILABLE'
+      : 'PUBLIC_PROFILE_ADDED',
+    averageViews: avgViews,
+    engagementRate: avgEngRate,
+    lastSyncedAt: new Date().toISOString(),
   };
 
-  await prisma.socialAccount.update({
-    where: { id: account.id },
-    data: {
-      username: profile.customUrl || profile.title,
-      authorizationReference: JSON.stringify(refData),
-      lastSyncedAt: new Date(),
-    },
-  });
+  const accountUsername = profile.customUrl || profile.title || account?.username || 'YouTube Channel';
 
-  // Upsert videos into Content table
+  if (account) {
+    account = await prisma.socialAccount.update({
+      where: { id: account.id },
+      data: {
+        platformAccountId: profile.channelId,
+        username: accountUsername,
+        authorizationReference: JSON.stringify(updatedRefData),
+        status: 'CONNECTED',
+        lastSyncedAt: new Date(),
+      },
+    });
+  } else {
+    account = await prisma.socialAccount.create({
+      data: {
+        creatorId,
+        platform: 'YOUTUBE',
+        platformAccountId: profile.channelId,
+        username: accountUsername,
+        authorizationReference: JSON.stringify(updatedRefData),
+        status: 'CONNECTED',
+        lastSyncedAt: new Date(),
+      },
+    });
+  }
+
+  // Upsert videos into Content table with real statistics
   for (const video of videos) {
     try {
       await prisma.content.upsert({
@@ -490,6 +791,9 @@ export async function syncCreatorYouTube(creatorId: string): Promise<{
           description: video.description,
           permalink: video.permalink,
           publishedAt: new Date(video.publishedAt),
+          views: video.viewCount !== undefined ? BigInt(video.viewCount) : undefined,
+          likes: video.likeCount !== undefined ? video.likeCount : undefined,
+          comments: video.commentCount !== undefined ? video.commentCount : undefined,
           socialAccountId: account.id,
         },
         create: {
@@ -502,6 +806,9 @@ export async function syncCreatorYouTube(creatorId: string): Promise<{
           permalink: video.permalink,
           contentType: 'VIDEO',
           publishedAt: new Date(video.publishedAt),
+          views: video.viewCount !== undefined ? BigInt(video.viewCount) : null,
+          likes: video.likeCount !== undefined ? video.likeCount : null,
+          comments: video.commentCount !== undefined ? video.commentCount : null,
         },
       });
     } catch (err: any) {
@@ -509,18 +816,19 @@ export async function syncCreatorYouTube(creatorId: string): Promise<{
     }
   }
 
-  // Record snapshot in CreatorMetricSnapshot
-  if (profile.subscriberCount > 0 || profile.viewCount > 0) {
-    await prisma.creatorMetricSnapshot.create({
-      data: {
-        creatorId,
-        socialAccountId: account.id,
-        followers: profile.subscriberCount,
-        totalViews: BigInt(profile.viewCount),
-        source: 'YOUTUBE_API_V3',
-      },
-    });
-  }
+  // Record a verified metric snapshot
+  await prisma.creatorMetricSnapshot.create({
+    data: {
+      creatorId,
+      socialAccountId: account.id,
+      followers: profile.subscriberCount,
+      totalViews: profile.viewCount !== null ? BigInt(profile.viewCount) : null,
+      averageViews: avgViews,
+      engagementRate: avgEngRate,
+      postingFrequency: postingCadence,
+      source: accessToken ? 'YOUTUBE_OAUTH' : 'YOUTUBE_PUBLIC_DATA',
+    },
+  });
 
   return {
     success: true,

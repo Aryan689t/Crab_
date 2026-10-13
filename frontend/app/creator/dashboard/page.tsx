@@ -128,14 +128,15 @@ export default function CreatorDashboardPage() {
   }
 
   // Derive real display values
-  const displayName = profile?.displayName || user?.displayName || 'Creator';
-  const avatarUrl = profile?.profileImageUrl || undefined;
+  const primaryAccount = (accounts || []).find((a: any) => a.platform === 'YOUTUBE') || (accounts || [])[0];
+  const displayName = profile?.displayName || primaryAccount?.title || user?.displayName || 'Creator';
+  const avatarUrl = profile?.profileImageUrl || primaryAccount?.thumbnailUrl || undefined;
   const bio = profile?.bio || undefined;
   const niches = profile?.niches || intelligence?.primaryNiches || [];
 
   // Determine connected social accounts
   const connectedSocials: BannerSocialAccount[] = (accounts || [])
-    .filter((a: any) => a.status === 'CONNECTED')
+    .filter((a: any) => a.status === 'CONNECTED' || a.status === 'LINKED')
     .map((a: any) => {
       const u = a.platformUsername || a.username || a.handle;
       return {
@@ -147,17 +148,17 @@ export default function CreatorDashboardPage() {
 
   // Platform stats for breakdown
   const platformStats: PlatformStat[] = (accounts || [])
-    .filter((a: any) => a.status === 'CONNECTED')
+    .filter((a: any) => a.status === 'CONNECTED' || a.status === 'LINKED')
     .map((a: any) => {
       const followers = a.metrics?.subscribers || a.metrics?.followers || a.stats?.subscriberCount || a.stats?.followerCount;
       const u = a.platformUsername || a.username || a.handle;
       return {
         platform: a.platform as PlatformStat['platform'],
-        name: a.platform === 'YOUTUBE' ? 'YouTube' : a.platform === 'INSTAGRAM' ? 'Instagram' : a.platform,
+        name: a.platform === 'YOUTUBE' ? (a.title || 'YouTube') : (a.platform === 'INSTAGRAM' ? 'Instagram' : a.platform),
         count: typeof followers === 'number'
           ? followers >= 1000 ? `${(followers / 1000).toFixed(1)}K` : `${followers}`
-          : 'Connected',
-        growth: 'Verified',
+          : 'Pending sync',
+        growth: a.ownershipVerified ? 'Owner Verified' : 'Public Profile',
         handle: u ? (u.startsWith('@') ? u : `@${u}`) : undefined,
         isConnected: true,
       };
@@ -265,30 +266,54 @@ export default function CreatorDashboardPage() {
           <CreatorMetricCard
             label="Audience Size"
             value={audienceValue}
-            subtext={hasMetrics ? 'Total verified audience' : 'Connect account to track'}
+            subtext={
+              hasMetrics && typeof metrics.followers === 'number'
+                ? 'Public subscriber count'
+                : hasConnectedAccount
+                ? 'Subscriber count hidden or pending'
+                : 'Connect account to track'
+            }
             icon={Users}
-            hasData={hasMetrics}
+            hasData={hasMetrics && typeof metrics.followers === 'number'}
           />
           <CreatorMetricCard
             label="Average Views"
             value={viewsValue}
-            subtext={hasMetrics ? 'Per recent post' : 'Requires content sync'}
+            subtext={
+              hasMetrics && typeof metrics.averageViews === 'number'
+                ? `Last ${metrics.averageViewsSampleSize || 10} videos sample`
+                : hasConnectedAccount
+                ? 'Insufficient public video history'
+                : 'Requires content sync'
+            }
             icon={Eye}
-            hasData={hasMetrics}
+            hasData={hasMetrics && typeof metrics.averageViews === 'number'}
           />
           <CreatorMetricCard
             label="Engagement Rate"
             value={engagementValue}
-            subtext={hasMetrics ? 'Average interactions' : 'Awaiting metrics'}
+            subtext={
+              hasMetrics && typeof metrics.engagementRate === 'number'
+                ? 'Likes + comments per view'
+                : hasConnectedAccount
+                ? 'Requires public interactions data'
+                : 'Awaiting metrics'
+            }
             icon={TrendingUp}
-            hasData={hasMetrics}
+            hasData={hasMetrics && typeof metrics.engagementRate === 'number'}
           />
           <CreatorMetricCard
             label="Posting Cadence"
             value={cadenceValue}
-            subtext={hasMetrics ? 'Weekly publishing rate' : 'No recent uploads'}
+            subtext={
+              hasMetrics && typeof metrics.postingFrequency === 'number'
+                ? 'Weekly cadence (observed uploads)'
+                : hasConnectedAccount
+                ? 'Need 2+ published videos'
+                : 'No recent uploads'
+            }
             icon={Layers}
-            hasData={hasMetrics}
+            hasData={hasMetrics && typeof metrics.postingFrequency === 'number'}
           />
         </section>
 

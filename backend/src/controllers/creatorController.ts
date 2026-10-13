@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { config } from '../config/env.js';
+import { syncCreatorYouTube, resolveYouTubeChannel, parseYouTubeInput } from '../integrations/youtube/index.js';
 
 const creatorProfileSchema = z.object({
   displayName: z.string().min(2, 'Display name must be at least 2 characters'),
@@ -217,6 +218,15 @@ export async function upsertCreatorProfile(req: Request, res: Response, next: Ne
           },
         }).catch(() => null);
       }
+
+      const ytUrl = (parsed.preferences as any)?.youtubeUrl || (req.body as any)?.youtubeUrl;
+      if (ytUrl && typeof ytUrl === 'string' && ytUrl.trim()) {
+        try {
+          await syncCreatorYouTube(creator.id, ytUrl.trim());
+        } catch (ytErr: any) {
+          console.warn('[PROFILE_UPDATE] YouTube sync note:', ytErr.message);
+        }
+      }
     } catch (dbErr) {
       console.warn('[CREATOR] DB write failed. Returning created profile object.', dbErr);
       creator = {
@@ -375,35 +385,49 @@ export async function getCreatorMetrics(req: Request, res: Response, next: NextF
     }> = [];
 
     accounts.forEach((acc) => {
+      let refData: any = {};
+      try {
+        refData = acc.authorizationReference ? JSON.parse(acc.authorizationReference) : {};
+      } catch {
+        refData = {};
+      }
       const latestAccSnapshot = acc.metricSnapshots && acc.metricSnapshots.length > 0 ? acc.metricSnapshots[0] : null;
-      const countNum = latestAccSnapshot?.followers ?? null;
+      const countNum = latestAccSnapshot?.followers ?? refData.subscriberCount ?? null;
       if (countNum !== null) {
         totalFollowers += countNum;
         hasMeasuredFollowers = true;
       }
+      const isOwner = Boolean(refData.ownershipVerified);
+      const connState = refData.connectionState || (isOwner ? 'OWNER_AUTHORIZED' : 'PUBLIC_DATA_AVAILABLE');
+
       platformsData.push({
         platform: acc.platform as any,
-        name: acc.platform === 'YOUTUBE' ? 'YouTube' : 'Instagram',
-        handle: acc.username.startsWith('@') ? acc.username : `@${acc.username}`,
-        count: countNum !== null ? `${(countNum / 1000).toFixed(1)}K` : 'Pending sync',
-        growth: latestAccSnapshot?.followers ? 'Tracked' : 'Pending sync',
+        name: acc.platform === 'YOUTUBE' ? (refData.channelTitle || 'YouTube') : 'Instagram',
+        handle: refData.customUrl || (acc.username.startsWith('@') ? acc.username : `@${acc.username}`),
+        count: countNum !== null ? (countNum >= 1000 ? `${(countNum / 1000).toFixed(1)}K` : `${countNum}`) : 'Pending sync',
+        growth: latestAccSnapshot?.followers ? 'Tracked' : 'Public Profile',
         followers: countNum,
         isConnected: acc.status === 'CONNECTED',
       });
     });
 
-    // Compute average views
+    // Compute average views and sample size
     let avgViews: number | null = latestSnapshot?.averageViews ?? null;
-    if (avgViews === null && contents.length > 0) {
+    let avgViewsSampleSize: number | null = null;
+    if (contents.length > 0) {
       const viewCounts = contents.map((c) => (c.views !== null ? Number(c.views) : null)).filter((v): v is number => v !== null);
       if (viewCounts.length > 0) {
-        avgViews = Math.round(viewCounts.reduce((a, b) => a + b, 0) / viewCounts.length);
+        const sample = viewCounts.slice(0, 10);
+        avgViews = Math.round(sample.reduce((a, b) => a + b, 0) / sample.length);
+        avgViewsSampleSize = sample.length;
       }
+    } else if (avgViews !== null) {
+      avgViewsSampleSize = 10;
     }
 
     // Compute engagement rate
     let engagementRate: number | null = latestSnapshot?.engagementRate ?? null;
-    if (engagementRate === null && contents.length > 0) {
+    if (contents.length > 0) {
       const rates = contents
         .map((c) => {
           const v = c.views !== null ? Number(c.views) : 0;
@@ -413,13 +437,14 @@ export async function getCreatorMetrics(req: Request, res: Response, next: NextF
         })
         .filter((r): r is number => r !== null);
       if (rates.length > 0) {
-        engagementRate = Number((rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(1));
+        const sample = rates.slice(0, 10);
+        engagementRate = Number((sample.reduce((a, b) => a + b, 0) / sample.length).toFixed(1));
       }
     }
 
     // Compute posting cadence
     let postingFrequency: number | null = latestSnapshot?.postingFrequency ?? null;
-    if (postingFrequency === null && contents.length >= 2) {
+    if (contents.length >= 2) {
       const dates = contents.map((c) => c.publishedAt).filter((d): d is Date => d !== null);
       if (dates.length >= 2) {
         const oldest = dates[dates.length - 1].getTime();
@@ -442,6 +467,7 @@ export async function getCreatorMetrics(req: Request, res: Response, next: NextF
         hasData: hasMeasuredFollowers || accounts.length > 0,
         followers: hasMeasuredFollowers ? totalFollowers : (latestSnapshot?.followers ?? null),
         averageViews: avgViews,
+        averageViewsSampleSize: avgViewsSampleSize,
         engagementRate: engagementRate,
         postingFrequency: postingFrequency,
         recordedAt: latestSnapshot?.recordedAt?.toISOString() || new Date().toISOString(),
@@ -776,42 +802,64 @@ export async function completeCreatorOnboarding(req: Request, res: Response, nex
       });
     }
 
-    // Upsert Social Accounts
+    // Upsert Social Accounts and trigger real sync
+    let resolvedYtThumbnail: string | null = null;
     if (normalizedYoutube) {
-      const existingYt = creator.socialAccounts.find((sa) => sa.platform === 'YOUTUBE');
-      if (existingYt) {
-        await prisma.socialAccount.update({
-          where: { id: existingYt.id },
-          data: {
-            username: ytHandle,
-            authorizationReference: normalizedYoutube,
-            status: 'CONNECTED',
-            lastSyncedAt: new Date(),
-          },
+      try {
+        const syncResult = await syncCreatorYouTube(creator.id, normalizedYoutube);
+        if (syncResult.channel?.thumbnailUrl) {
+          resolvedYtThumbnail = syncResult.channel.thumbnailUrl;
+        }
+      } catch (ytErr: any) {
+        console.warn('[ONBOARDING] YouTube sync note:', ytErr.message);
+        // Fallback to basic record if network or quota issue
+        const existingYt = creator.socialAccounts.find((sa) => sa.platform === 'YOUTUBE');
+        const basicRef = JSON.stringify({
+          channelUrl: normalizedYoutube,
+          customUrl: ytHandle,
+          ownershipVerified: false,
+          connectionState: 'PUBLIC_PROFILE_ADDED',
         });
-      } else {
-        await prisma.socialAccount.create({
-          data: {
-            creatorId: creator.id,
-            platform: 'YOUTUBE',
-            platformAccountId: `yt_${creator.id}`,
-            username: ytHandle,
-            authorizationReference: normalizedYoutube,
-            status: 'CONNECTED',
-            lastSyncedAt: new Date(),
-          },
-        });
+        if (existingYt) {
+          await prisma.socialAccount.update({
+            where: { id: existingYt.id },
+            data: {
+              username: ytHandle,
+              authorizationReference: basicRef,
+              status: 'CONNECTED',
+              lastSyncedAt: new Date(),
+            },
+          });
+        } else {
+          await prisma.socialAccount.create({
+            data: {
+              creatorId: creator.id,
+              platform: 'YOUTUBE',
+              platformAccountId: `yt_${creator.id}`,
+              username: ytHandle,
+              authorizationReference: basicRef,
+              status: 'CONNECTED',
+              lastSyncedAt: new Date(),
+            },
+          });
+        }
       }
     }
 
     if (normalizedInstagram) {
       const existingIg = creator.socialAccounts.find((sa) => sa.platform === 'INSTAGRAM');
+      const igRef = JSON.stringify({
+        profileUrl: normalizedInstagram,
+        handle: igHandle,
+        ownershipVerified: false,
+        connectionState: 'PUBLIC_PROFILE_ADDED',
+      });
       if (existingIg) {
         await prisma.socialAccount.update({
           where: { id: existingIg.id },
           data: {
             username: igHandle,
-            authorizationReference: normalizedInstagram,
+            authorizationReference: igRef,
             status: 'CONNECTED',
             lastSyncedAt: new Date(),
           },
@@ -823,7 +871,7 @@ export async function completeCreatorOnboarding(req: Request, res: Response, nex
             platform: 'INSTAGRAM',
             platformAccountId: `ig_${creator.id}`,
             username: igHandle,
-            authorizationReference: normalizedInstagram,
+            authorizationReference: igRef,
             status: 'CONNECTED',
             lastSyncedAt: new Date(),
           },
@@ -853,6 +901,7 @@ export async function completeCreatorOnboarding(req: Request, res: Response, nex
       data: {
         preferences: updatedPreferences,
         contactInformation: updatedContact,
+        ...(!creator.profileImageUrl && resolvedYtThumbnail ? { profileImageUrl: resolvedYtThumbnail } : {}),
       },
       include: {
         socialAccounts: true,

@@ -49,6 +49,9 @@ export async function getConnectedAccounts(req: Request, res: Response, next: Ne
         refData = {};
       }
 
+      const isOwner = Boolean(refData.ownershipVerified);
+      const connectionState = refData.connectionState || (isOwner ? 'OWNER_AUTHORIZED' : 'PUBLIC_DATA_AVAILABLE');
+
       return {
         id: acc.id,
         platform: acc.platform,
@@ -58,12 +61,24 @@ export async function getConnectedAccounts(req: Request, res: Response, next: Ne
         title: refData.channelTitle || acc.username,
         thumbnailUrl: refData.thumbnailUrl || '',
         status: acc.status,
+        ownershipVerified: isOwner,
+        connectionState,
         connectedAt: acc.connectedAt,
         lastSyncedAt: acc.lastSyncedAt,
         stats: {
-          subscriberCount: refData.subscriberCount || 0,
-          viewCount: refData.viewCount || 0,
-          videoCount: refData.videoCount || acc.contents.length,
+          subscriberCount: refData.subscriberCount ?? null,
+          viewCount: refData.viewCount ?? null,
+          videoCount: refData.videoCount ?? acc.contents.length,
+          averageViews: refData.averageViews ?? null,
+          engagementRate: refData.engagementRate ?? null,
+        },
+        metrics: {
+          subscribers: refData.subscriberCount ?? null,
+          followers: refData.subscriberCount ?? null,
+          views: refData.viewCount ?? null,
+          videos: refData.videoCount ?? acc.contents.length,
+          averageViews: refData.averageViews ?? null,
+          engagementRate: refData.engagementRate ?? null,
         },
         recentVideos: acc.contents.map((c) => ({
           id: c.platformContentId,
@@ -72,6 +87,9 @@ export async function getConnectedAccounts(req: Request, res: Response, next: Ne
           permalink: c.permalink,
           publishedAt: c.publishedAt,
           thumbnailUrl: `https://i.ytimg.com/vi/${c.platformContentId}/hqdefault.jpg`,
+          views: c.views !== null ? Number(c.views) : null,
+          likes: c.likes ?? null,
+          comments: c.comments ?? null,
         })),
       };
     });
@@ -364,8 +382,13 @@ export async function connectYouTubeManual(req: Request, res: Response, next: Ne
       return;
     }
 
-    const creator = await prisma.creator.findUnique({
-      where: { userId: req.user.id },
+    const creator = await prisma.creator.findFirst({
+      where: {
+        OR: [
+          { userId: req.user.id },
+          ...(req.user.email ? [{ user: { email: req.user.email } }] : []),
+        ],
+      },
     });
 
     if (!creator) {
@@ -373,99 +396,23 @@ export async function connectYouTubeManual(req: Request, res: Response, next: Ne
       return;
     }
 
-    // Clean handle
-    let handle = channelHandleOrUrl.trim();
-    if (handle.includes('youtube.com/')) {
-      const parts = handle.split('youtube.com/')[1].split('/')[0].split('?')[0];
-      handle = parts;
-    }
-    if (!handle.startsWith('@') && !handle.startsWith('UC')) {
-      handle = `@${handle}`;
-    }
+    // Call real synchronization and channel resolution
+    const syncResult = await syncCreatorYouTube(creator.id, channelHandleOrUrl.trim());
 
-    // Upsert SocialAccount
-    const existing = await prisma.socialAccount.findFirst({
-      where: { creatorId: creator.id, platform: 'YOUTUBE' },
-    });
-
-    const refData = {
-      channelTitle: handle,
-      customUrl: handle,
-      thumbnailUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      subscriberCount: 154000,
-      viewCount: 19800000,
-      videoCount: 142,
-      uploadsPlaylistId: `UU_${handle}`,
-    };
-
-    let socialAccount;
-    if (existing) {
-      socialAccount = await prisma.socialAccount.update({
-        where: { id: existing.id },
-        data: {
-          platformAccountId: `yt_${handle.replace('@', '')}`,
-          username: handle,
-          authorizationReference: JSON.stringify(refData),
-          status: 'CONNECTED',
-          lastSyncedAt: new Date(),
-        },
+    // Update creator avatar if not set
+    if (!creator.profileImageUrl && syncResult.channel?.thumbnailUrl) {
+      await prisma.creator.update({
+        where: { id: creator.id },
+        data: { profileImageUrl: syncResult.channel.thumbnailUrl },
       });
-    } else {
-      socialAccount = await prisma.socialAccount.create({
-        data: {
-          creatorId: creator.id,
-          platform: 'YOUTUBE',
-          platformAccountId: `yt_${handle.replace('@', '')}`,
-          username: handle,
-          authorizationReference: JSON.stringify(refData),
-          status: 'CONNECTED',
-        },
-      });
-    }
-
-    // Add sample recent uploads if empty
-    const count = await prisma.content.count({
-      where: { creatorId: creator.id, platform: 'YOUTUBE' },
-    });
-
-    if (count === 0) {
-      const sampleVideos = [
-        {
-          id: 'yt_vid_new_01',
-          title: 'Cloud Infrastructure Launch & CLI Deep Dive',
-          description: 'Official 12-minute technical walkthrough and CLI integration tutorial for Acme Cloud.',
-          permalink: 'https://www.youtube.com/watch?v=yt_vid_new_01',
-        },
-        {
-          id: 'yt_vid_new_02',
-          title: 'Building Scalable Fullstack Workspaces in 2026',
-          description: 'Architectural overview of modern fullstack applications with Next.js 15 and PostgreSQL.',
-          permalink: 'https://www.youtube.com/watch?v=yt_vid_new_02',
-        },
-      ];
-
-      for (const sv of sampleVideos) {
-        await prisma.content.create({
-          data: {
-            creatorId: creator.id,
-            socialAccountId: socialAccount.id,
-            platform: 'YOUTUBE',
-            platformContentId: sv.id,
-            title: sv.title,
-            description: sv.description,
-            permalink: sv.permalink,
-            contentType: 'VIDEO',
-            publishedAt: new Date(),
-          },
-        });
-      }
     }
 
     res.status(200).json({
       data: {
         success: true,
-        message: `YouTube channel ${handle} connected successfully.`,
-        account: socialAccount,
+        message: `YouTube channel ${syncResult.channel.title} resolved and synchronized successfully.`,
+        channel: syncResult.channel,
+        videos: syncResult.videos,
       },
     });
   } catch (err) {

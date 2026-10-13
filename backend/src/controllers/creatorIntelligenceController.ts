@@ -76,13 +76,16 @@ export async function analyzeCreatorIntelligence(
       return;
     }
 
-    // 1. If an authorized YouTube channel exists, synchronize latest videos and metrics
-    const ytAccount = creator.socialAccounts.find(
-      (a) => a.platform === 'YOUTUBE' && a.status === 'CONNECTED'
-    );
-    if (ytAccount) {
+    // 1. If a YouTube channel exists, synchronize latest videos and metrics
+    const ytAccount = creator.socialAccounts.find((a) => a.platform === 'YOUTUBE');
+    const prefs = (creator.preferences as Record<string, any>) || {};
+    const channelInput = ytAccount?.platformAccountId?.startsWith('UC')
+      ? ytAccount.platformAccountId
+      : prefs.youtubeUrl || ytAccount?.username;
+
+    if (channelInput) {
       try {
-        await syncCreatorYouTube(creator.id);
+        await syncCreatorYouTube(creator.id, channelInput);
       } catch (syncErr: any) {
         console.warn('[CREATOR_INTELLIGENCE] YouTube sync note during refresh:', syncErr.message);
       }
