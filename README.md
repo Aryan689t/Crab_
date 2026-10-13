@@ -1,226 +1,284 @@
-# CRAB — Creators Reaching Aligned Brands
+<div align="center">
 
-CRAB is an AI-powered two-sided Creator–Brand Opportunity Engine. It uses contextual understanding, pgvector semantic embeddings, and explainable AI reasoning to connect creators and brands.
+  <img src="./frontend/public/crab-logo.png" alt="CRAB Logo" width="120" style="border-radius: 24px;" />
+
+  # 🦀 CRAB — Creator–Brand Alignment Bridge
+  ### *The AI-Powered Opportunity Engine Connecting Creators & Brands Through Contextual Intelligence & Real Social Graph Analytics*
+
+  <p align="center">
+    <a href="#-architecture--tech-stack"><img src="https://img.shields.io/badge/Next.js%2015-black?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js 15" /></a>
+    <a href="#-architecture--tech-stack"><img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+    <a href="#-architecture--tech-stack"><img src="https://img.shields.io/badge/Node.js%20%2F%20Express-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Express" /></a>
+    <a href="#-architecture--tech-stack"><img src="https://img.shields.io/badge/Prisma%20ORM-2D3748?style=for-the-badge&logo=prisma&logoColor=white" alt="Prisma" /></a>
+    <a href="#-architecture--tech-stack"><img src="https://img.shields.io/badge/Supabase%20PostgreSQL-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" /></a>
+    <a href="#-architecture--tech-stack"><img src="https://img.shields.io/badge/pgvector-Semantic%20Search-blue?style=for-the-badge&logo=postgresql&logoColor=white" alt="pgvector" /></a>
+    <a href="#-architecture--tech-stack"><img src="https://img.shields.io/badge/Google%20Gemini%202.5-8E75C4?style=for-the-badge&logo=googlegemini&logoColor=white" alt="Gemini" /></a>
+    <a href="#-architecture--tech-stack"><img src="https://img.shields.io/badge/Meta%20Instagram%20API-E4405F?style=for-the-badge&logo=instagram&logoColor=white" alt="Instagram" /></a>
+    <a href="#-architecture--tech-stack"><img src="https://img.shields.io/badge/YouTube%20Data%20API-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="YouTube" /></a>
+  </p>
+
+  <p align="center">
+    <b>CRAB</b> replaces superficial follower counts with <b>evidence-based contextual alignment</b>. By analyzing real video transcripts, post captions, publishing cadence, and brand briefs with Gemini 2.5 and <code>pgvector</code> embeddings, CRAB finds creators who genuinely match brand campaigns.
+  </p>
+
+  <p align="center">
+    <a href="#-key-features"><b>Explore Features</b></a> •
+    <a href="#-system-architecture"><b>Architecture</b></a> •
+    <a href="#-quickstart-guide"><b>Quickstart Setup</b></a> •
+    <a href="#-environment-variables"><b>Configuration</b></a> •
+    <a href="#-api-endpoints"><b>API Docs</b></a>
+  </p>
+
+</div>
 
 ---
 
-## 🏗️ Architecture Overview
+## 🌟 The Problem & The CRAB Solution
 
-- **Frontend**: Next.js 15 (App Router, Turbopack), TypeScript, Tailwind CSS, Lucide Icons, Framer Motion, Recharts (Port `3000`)
-- **Backend**: Node.js + Express.js (TypeScript), Prisma ORM (Port `5000`)
-- **Database & Vectors**: Supabase PostgreSQL with `pgvector` extension
-- **Authentication**: Supabase Auth (JWT Bearer Token with role authorization middleware) & Demo one-click bypass
-- **AI Engine**: Google Gemini API + text embeddings
-
----
-
-## 📋 Prerequisites
-
-Before starting, ensure your laptop has:
-- **Node.js**: v18.17+ or v20+ (`node -v`)
-- **npm**: v9+ (`npm -v`)
-- **Git**: Installed and configured (`git --version`)
-- **PowerShell**: Windows PowerShell or PowerShell 7 (commands below use PowerShell syntax)
+| Traditional Marketplace Problem | The CRAB AI Solution |
+| :--- | :--- |
+| **Vanity Metrics**: Brands hire based purely on inflated follower counts without audience relevance. | **Real Social Ingestion**: Direct integration with YouTube Data API v3 and Meta Instagram Graph API ingesting actual uploads, likes, and comment velocity. |
+| **Keyword Guessing**: Search filters rely on rigid keyword tags that miss niche crossover audiences. | **pgvector Semantic Search**: High-dimensional embeddings match natural-language campaign briefs with deep creator content history. |
+| **Hallucinated & Mock Data**: Dashboards full of hardcoded dummy metrics and fake AI summaries. | **Ground-Truth Gemini Intelligence**: Every niche tag, audience interest, and brand suitability recommendation is strictly backed by retrieved database content. |
+| **Fragmented Deliverables**: Collaborations managed across endless email chains and spreadsheets. | **Integrated Collaboration Engine**: Deliverable submission directly verified against ingested YouTube and Instagram media with milestone status tracking. |
 
 ---
 
-## 🚀 Teammate Setup Guide (Windows PowerShell)
+## ✨ Key Features
 
-Follow these steps to clone, configure, and run the project locally.
+### 🧠 1. Creator Intelligence Pipeline (Google Gemini 2.5)
+* **Evidence-Grounded Reasoning**: Analyzes up to 30 recent real creator videos and Instagram posts.
+* **Semantic Content Profiling**: Automatically extracts primary and secondary content niches, communication style, audience interests, and commercial suitability.
+* **Brand Compatibility Signals**: Recommends campaign types that naturally fit the creator's voice, highlighting sensitive verticals to avoid.
+* **Honest Confidence Scoring**: Distinguishes measured facts from AI inferences. If content is sparse, displays honest insufficient-data states rather than inventing statistics.
 
-### 1. Clone the Repository
+### 🔴 2. YouTube Data API v3 Integration (Real Data Only)
+* **Channel Ingestion**: Instant synchronization of channel subscriber counts, lifetime views, and total uploads.
+* **Upload Ingestion**: Automatically crawls the uploads playlist to fetch published video titles, descriptions, publication timestamps, and view counts.
+* **Dual Connection Support**: Full Google OAuth 2.0 authorization or direct handle/channel resolution (`@handle`).
 
-Open Windows PowerShell and clone the project:
+### 🟣 3. Meta Instagram Graph API Integration (Official OAuth)
+* **Secure Meta OAuth 2.0**: Single-use cryptographic CSRF state validation with 15-minute expiration and replay attack prevention.
+* **Long-Lived Token Exchange**: Short-lived tokens are upgraded on the server to 60-day refreshable long-lived access tokens via `graph.instagram.com`.
+* **Media & Post Tracking**: Retrieves real captions, permalinks, post timestamps, like counts, comment counts, and media formats (Reels, Carousels, Images).
+* **Strict Server-Side Isolation**: Meta client secrets and access tokens are encrypted and never exposed to the frontend.
 
-```powershell
-git clone https://github.com/Aryan689t/Crab_.git
-Set-Location Crab_
+### 🎨 4. Dual Workspace Architecture
+* **Creator Portal** (`/creator`):
+  * **Overview KPI Cards**: Audience size, verified average interactions, engagement rate, and weekly posting cadence.
+  * **Platform Breakdown**: Live status badges and follower distributions across YouTube and Instagram.
+  * **Intelligence Dashboard**: Gemini-generated brand suitability profile and content style badges.
+  * **Collaborations Workspace**: Deliverable fulfillment with single-click YouTube video or Instagram Reel submission.
+* **Brand Portal** (`/brand`):
+  * **Campaign Studio**: Structured campaign creator with target niches, deliverable requirements, timeline, and budget ranges.
+  * **Creator Discovery & Matching**: Real-time semantic similarity match scores calculated from pgvector embeddings.
+  * **Applications & Offers**: Review creator applications, send custom collaboration offers, and track contract milestones.
+  * **Brand Inbox**: Direct real-time messaging thread between creators and brands.
+
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TD
+    subgraph Client["Frontend (Next.js 15 App Router)"]
+        UI_Creator["Creator Portal\n(/creator/*)"]
+        UI_Brand["Brand Portal\n(/brand/*)"]
+        UI_Auth["Supabase Auth Context\n& Demo Bypass"]
+    end
+
+    subgraph Server["Backend (Node.js & Express TypeScript)"]
+        API_Auth["Auth Middleware\n(JWT & Role Guard)"]
+        API_Social["Social API Handlers\n(OAuth & Webhooks)"]
+        API_Intel["Intelligence Controller"]
+        API_Collab["Collaborations Controller"]
+    end
+
+    subgraph Data["Database & Vector Storage (Supabase)"]
+        DB_PG[("PostgreSQL")]
+        DB_VEC[("pgvector\nEmbeddings")]
+        Prisma["Prisma ORM Client"]
+    end
+
+    subgraph External["External Providers & APIs"]
+        MetaAPI["Meta Instagram Graph API\n(OAuth & Media Nodes)"]
+        YouTubeAPI["Google YouTube Data API v3\n(Channels & Playlists)"]
+        GeminiAPI["Google Gemini 2.5 Flash\n(Structured Analysis)"]
+    end
+
+    UI_Creator -->|HTTP / JSON| API_Auth
+    UI_Brand -->|HTTP / JSON| API_Auth
+    API_Auth --> API_Social
+    API_Auth --> API_Intel
+    API_Auth --> API_Collab
+
+    API_Social -->|OAuth & Token Exchange| MetaAPI
+    API_Social -->|Channel & Video Lookup| YouTubeAPI
+    API_Intel -->|Evidence-Based Prompting| GeminiAPI
+
+    API_Social --> Prisma
+    API_Intel --> Prisma
+    API_Collab --> Prisma
+
+    Prisma --> DB_PG
+    Prisma --> DB_VEC
 ```
 
 ---
 
-### 2. Install Dependencies
+## 🚀 Quickstart Guide
 
-CRAB is structured as an npm monorepo with `frontend` and `backend` workspaces. Installing from the root will install dependencies across all workspaces:
+### Prerequisites
+* **Node.js**: v18.18+ or v20+ (`node -v`)
+* **npm**: v9+ or v10+ (`npm -v`)
+* **Git**: Installed and configured (`git --version`)
 
-```powershell
+---
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/Aryan689t/Crab_.git
+cd Crab_
+```
+
+---
+
+### Step 2: Install All Dependencies
+
+CRAB uses npm workspaces. Installing from the root installs dependencies across the root, `backend`, and `frontend`:
+
+```bash
 npm install
 ```
 
-*(Optional: If you ever need to install dependencies in a specific workspace individually:)*
-```powershell
-npm install --workspace=backend
-npm install --workspace=frontend
-```
-
 ---
 
-### 3. Configure Local Environment Variables
+### Step 3: Configure Environment Variables
 
-Both the backend and frontend have `.env.example` templates with descriptive placeholders.
+Generate local `.env` files from the provided templates:
 
-#### Step 3a: Create your local `.env` files
-
-Run these PowerShell commands in the repository root:
-
+**Windows PowerShell:**
 ```powershell
-# Copy backend template to backend/.env
 Copy-Item backend\.env.example backend\.env
-
-# Copy frontend template to frontend/.env.local
 Copy-Item frontend\.env.example frontend\.env.local
 ```
 
-> **Security Note**: `backend/.env` and `frontend/.env.local` are explicitly ignored by Git in `.gitignore`. Never commit or push real credentials.
+**macOS / Linux:**
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+```
 
-#### Step 3b: Obtain and configure credentials
-
-Obtain the project credentials from your team lead via a secure channel (e.g., direct messaging, password manager, or team vault).
-
-##### Backend Configuration (`backend\.env`)
-Open `backend\.env` in your editor and fill in the values:
-
+#### Backend Settings (`backend/.env`):
 ```env
 PORT=5000
 NODE_ENV=development
-
-# Supabase PostgreSQL Connection Strings
-# IMPORTANT: If your DB password contains special characters (e.g. '@', ':', '#'),
-# they MUST be percent-encoded (e.g., '@' becomes '%40').
-# Pooler Connection (Port 6543) - used by backend runtime:
-DATABASE_URL="postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require"
-
-# Direct Connection (Port 5432) - used by Prisma CLI for migrations:
-DIRECT_URL="postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres?sslmode=require"
-
-# Supabase Project API Credentials
-SUPABASE_URL="https://[PROJECT_REF].supabase.co"
-SUPABASE_ANON_KEY="[YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY]"
-# Optional for local demo runs; required for administrative Supabase scripts:
-SUPABASE_SERVICE_ROLE_KEY=""
-
-# Application Secrets
-JWT_SECRET="crab-dev-secret-change-in-production-12345"
 FRONTEND_URL="http://localhost:3000"
 CORS_ORIGIN="http://localhost:3000"
 
-# AI Service (Optional for basic navigation & demo login)
-GEMINI_API_KEY=""
+# Supabase PostgreSQL (Transaction Pooler port 6543)
+DATABASE_URL="postgresql://postgres.[REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require"
+DIRECT_URL="postgresql://postgres.[REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres?sslmode=require"
+
+# Supabase Auth
+SUPABASE_URL="https://[REF].supabase.co"
+SUPABASE_ANON_KEY="your-supabase-anon-key"
+JWT_SECRET="your-development-jwt-secret"
+
+# AI Integration
+GEMINI_API_KEY="your-gemini-api-key"
+GEMINI_MODEL="gemini-2.5-flash"
+
+# Meta Instagram Graph API
+INSTAGRAM_APP_ID="your-meta-app-id"
+INSTAGRAM_APP_SECRET="your-meta-app-secret"
+INSTAGRAM_REDIRECT_URI="http://localhost:5000/api/social/instagram/callback"
+
+# YouTube Data API
+YOUTUBE_API_KEY="your-youtube-api-key"
 ```
 
-##### Frontend Configuration (`frontend\.env.local`)
-Open `frontend\.env.local` in your editor and fill in the values:
-
+#### Frontend Settings (`frontend/.env.local`):
 ```env
-# Backend API base URL
 NEXT_PUBLIC_API_URL=http://localhost:5000
-
-# Supabase public credentials (matches backend project)
-NEXT_PUBLIC_SUPABASE_URL=https://[PROJECT_REF].supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=[YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY]
+NEXT_PUBLIC_SUPABASE_URL=https://[REF].supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
 ---
 
-### 4. Generate Prisma Client
+### Step 4: Generate Prisma Client
 
-Generate the Prisma Client so TypeScript and Express can query the database:
-
-```powershell
-npx prisma generate --schema=backend\prisma\schema.prisma
+```bash
+npx prisma generate --schema=backend/prisma/schema.prisma
 ```
 
 ---
 
-### 5. Database Schema & Seed Data (When Needed)
+### Step 5: Launch Development Servers
 
-- **Using the Existing Shared Supabase Database**:
-  If you are connecting to our team's existing shared database, the schema and demo seed data (AWS, Veloce AI, demo creators) are already present. **Do not run `prisma migrate reset` or push destructive migrations.**
-- **Setting Up a Fresh/Personal Supabase Project**:
-  If you created a new personal Supabase project from scratch:
-  ```powershell
-  # 1. Push schema to Supabase:
-  npx prisma db push --schema=backend\prisma\schema.prisma
+Run both the frontend and backend simultaneously using the root monorepo script:
 
-  # 2. Populate demo accounts and campaigns:
-  npm run db:seed --workspace=backend
-  ```
-
----
-
-### 6. Start the Application
-
-You can start both frontend and backend concurrently with a single command from the project root:
-
-```powershell
+```bash
 npm run dev
 ```
 
-#### Starting in Separate Terminals (Recommended for debugging)
-If you prefer separate logs:
-
-**Terminal 1 (Backend):**
-```powershell
-npm run dev:backend
-```
-*Backend runs at: [http://localhost:5000](http://localhost:5000)*
-
-**Terminal 2 (Frontend):**
-```powershell
-npm run dev:frontend
-```
-*Frontend runs at: [http://localhost:3000](http://localhost:3000)*
+* 🌐 **Frontend**: [http://localhost:3000](http://localhost:3000)
+* ⚙️ **Backend**: [http://localhost:5000](http://localhost:5000)
+* 🩺 **Backend Health Check**: [http://localhost:5000/health](http://localhost:5000/health)
 
 ---
 
-### 7. Verify Application Functionality
+## 🔐 Credentials & Security Matrix
 
-1. **Verify Backend Health**:
-   Open [http://localhost:5000/health](http://localhost:5000/health) in your browser.
-   You should see: `{"status":"ok","timestamp":"...","environment":"development"}`.
-2. **Verify Frontend**:
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
-3. **Verify Demo Logins**:
-   - Navigate to [http://localhost:3000/login](http://localhost:3000/login).
-   - Click **"Explore as Creator"** — should log in as *Tech Lead Alex* and open `/creator/dashboard`.
-   - Log out, return to `/login`, and click **"Explore as Brand"** — should log in as *Sarah Chen (Veloce AI)* and open `/brand/dashboard`.
-
----
-
-## 🔐 Credentials & Security Rules
-
-| Credential | Scope | Safe to Share in Frontend? | Notes |
+| Variable | Target | Client-Safe? | Description |
 | :--- | :--- | :---: | :--- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Frontend & Backend | **Yes** | Public project endpoint |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Frontend & Backend | **Yes** | Client-safe key protected by Supabase RLS |
-| `NEXT_PUBLIC_API_URL` | Frontend | **Yes** | Points to local backend (`http://localhost:5000`) |
-| `DATABASE_URL` | Backend Only | **NO** | Pooler connection string with password |
-| `DIRECT_URL` | Backend Only | **NO** | Direct DB connection string with password |
-| `SUPABASE_SERVICE_ROLE_KEY` | Backend Only | **NO** | Bypasses all Row Level Security. Never expose to client! |
-| `JWT_SECRET` | Backend Only | **NO** | Used to sign backend session tokens |
-| `GEMINI_API_KEY` | Backend Only | **NO** | Google AI API key |
+| `NEXT_PUBLIC_SUPABASE_URL` | Frontend & Backend | **YES** | Public Supabase project API host |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Frontend & Backend | **YES** | Public Supabase anonymous key (protected by RLS) |
+| `NEXT_PUBLIC_API_URL` | Frontend | **YES** | Base URL of CRAB Express API |
+| `DATABASE_URL` | Backend Only | ❌ **NO** | Supabase connection string (pooler port 6543) |
+| `DIRECT_URL` | Backend Only | ❌ **NO** | Direct connection string for Prisma migrations |
+| `GEMINI_API_KEY` | Backend Only | ❌ **NO** | Google AI API key (never expose to Vercel/frontend) |
+| `INSTAGRAM_APP_SECRET` | Backend Only | ❌ **NO** | Meta OAuth application client secret |
+| `JWT_SECRET` | Backend Only | ❌ **NO** | Secret key for signing internal CRAB session tokens |
 
 ---
 
-## 🛠️ Common Troubleshooting
+## 📡 Core API Blueprint
 
-### 1. Port already in use (`EADDRINUSE: 3000` or `EADDRINUSE: 5000`)
-If a server didn't close properly, find and kill the process in PowerShell:
-```powershell
-# For Port 3000
-Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force }
+| Domain | Method | Endpoint | Description |
+| :--- | :---: | :--- | :--- |
+| **Auth** | `POST` | `/api/auth/login` | Email/password or session login |
+| **Auth** | `GET` | `/api/auth/me` | Fetch authenticated user profile & role |
+| **Creators** | `GET` | `/api/creators/me` | Authenticated creator profile & niches |
+| **Creators** | `PATCH` | `/api/creators/me` | Update bio, location, baseline pricing, and niches |
+| **Intelligence** | `GET` | `/api/creators/me/intelligence` | Retrieve stored Gemini AI analysis |
+| **Intelligence** | `POST` | `/api/creators/me/intelligence/analyze` | Refresh live social data & trigger Gemini re-analysis |
+| **Social** | `GET` | `/api/social/accounts` | List connected YouTube & Instagram accounts |
+| **YouTube** | `GET` | `/api/social/youtube/videos` | Fetch stored YouTube uploaded video records |
+| **YouTube** | `POST` | `/api/social/youtube/sync` | Re-sync YouTube channel statistics & recent uploads |
+| **Instagram** | `GET` | `/api/social/instagram/auth-url` | Generate Meta Instagram OAuth authorization URL |
+| **Instagram** | `GET` | `/api/social/instagram/callback` | Handle Meta OAuth callback & exchange long-lived tokens |
+| **Instagram** | `GET` | `/api/social/instagram/media` | Fetch stored Instagram posts & reels |
+| **Instagram** | `POST` | `/api/social/instagram/sync` | Re-sync Instagram account metadata & media |
+| **Campaigns** | `GET` | `/api/campaigns` | List active brand campaigns |
+| **Campaigns** | `POST` | `/api/campaigns` | Create a new brand campaign brief |
+| **Collabs** | `POST` | `/api/collaborations/:id/submit-video` | Submit YouTube or Instagram media deliverable proof |
 
-# For Port 5000
-Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force }
+---
+
+## 🧪 Verification & Testing
+
+CRAB includes built-in test scripts for verifying data ingestion and security flows:
+
+```bash
+# Run Instagram integration & OAuth CSRF verification suite:
+npx tsx backend/src/scripts/verifyInstagram.ts
+
+# Run frontend production build check:
+npm run build --workspace=frontend
 ```
-
-### 2. Database connection failure (`PrismaClientInitializationError` / `P1001`)
-- Verify that your network allows connections to Supabase (check firewall/VPN).
-- Check `backend/.env`. If your database password contains characters like `@`, `:`, `#`, or `/`, ensure they are percent-encoded (e.g. `p@ssword` becomes `p%40ssword`).
-- Ensure `DATABASE_URL` uses port `6543` with `?pgbouncer=true&sslmode=require`.
-
-### 3. Missing Environment Variable warnings on startup
-The backend includes built-in environment variable validation on boot (`src/config/env.ts`). If any required variable is missing, a clear banner will be printed to your console with instructions.
 
 ---
 
@@ -228,23 +286,38 @@ The backend includes built-in environment variable validation on boot (`src/conf
 
 ```text
 Crab_/
-├── backend/                # Express REST API & Prisma workspace
-│   ├── prisma/             # Schema definitions and migrations
+├── backend/                        # Node.js + Express TypeScript API
+│   ├── prisma/                     # Prisma schema, migrations & seed scripts
+│   │   └── schema.prisma           # Complete relational & vector schema
 │   ├── src/
-│   │   ├── config/         # Environment variables & startup validation
-│   │   ├── controllers/    # Route controllers (auth, campaigns, creators)
-│   │   ├── lib/            # Prisma, Supabase, and Redis singletons
-│   │   ├── middleware/     # Auth verification and error handlers
-│   │   └── routes/         # Express API routes
-│   ├── .env.example        # Backend environment template
+│   │   ├── config/                 # Environment validation & setup
+│   │   ├── controllers/            # Route controllers (social, creators, campaigns)
+│   │   ├── integrations/
+│   │   │   ├── gemini/             # Google Gemini 2.5 Flash analysis & prompts
+│   │   │   ├── instagram/          # Meta Instagram Graph API engine & OAuth
+│   │   │   └── youtube/            # Google YouTube Data API v3 engine
+│   │   ├── middleware/             # Supabase JWT authentication & role guards
+│   │   ├── routes/                 # Express REST route definitions
+│   │   └── scripts/                # Automated verification suites
 │   └── package.json
-├── frontend/               # Next.js App Router workspace
-│   ├── app/                # Pages and layouts (creator & brand dashboards, login)
-│   ├── components/         # Reusable UI components
-│   ├── lib/                # API client, auth context, Supabase client
-│   ├── .env.example        # Frontend environment template
+├── frontend/                       # Next.js 15 App Router Frontend
+│   ├── app/                        # Pages & routing
+│   │   ├── brand/                  # Brand portal (dashboard, campaigns, discovery)
+│   │   ├── creator/                # Creator portal (dashboard, intel, collabs)
+│   │   └── login/                  # Authentication & one-click demo login
+│   ├── components/                 # Reusable UI components & navigation
+│   ├── lib/                        # API client, auth context & helpers
+│   ├── public/                     # Brand logos, icons & static assets
 │   └── package.json
-├── design/                 # UI screens & design references
-├── docs/                   # Product, SRD, Architecture & Roadmap docs
-└── package.json            # Root workspace scripts
+└── package.json                    # Monorepo orchestration scripts
 ```
+
+---
+
+## 👥 Contributors
+
+Built with ❤️ by the **CRAB Team** as the next-generation Creator–Brand Opportunity Engine.
+
+<p align="center">
+  <b>CRAB</b> — <i>Turning creator content into clear brand opportunity.</i>
+</p>
