@@ -3,6 +3,7 @@ import {
   getCampaigns,
   getCampaignById,
   createCampaign,
+  deleteCampaign,
 } from '../controllers/campaignController.js';
 import {
   getCampaignIntelligenceHandler,
@@ -39,6 +40,9 @@ campaignRouter.patch('/:id/shortlist/:creatorId', authenticateToken, requireRole
 
 // GET /api/campaigns/:id - Retrieve campaign details
 campaignRouter.get('/:id', authenticateToken, getCampaignById);
+
+// DELETE /api/campaigns/:id - Delete / remove a campaign event
+campaignRouter.delete('/:id', authenticateToken, deleteCampaign);
 
 // POST /api/campaigns - Create a campaign (Requires BRAND role)
 campaignRouter.post('/', authenticateToken, requireRole('BRAND'), createCampaign);

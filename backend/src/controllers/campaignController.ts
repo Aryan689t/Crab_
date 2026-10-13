@@ -264,3 +264,48 @@ export async function getMyBrandCampaigns(req: Request, res: Response, next: Nex
     next(err);
   }
 }
+
+/**
+ * DELETE /api/campaigns/:id
+ * Removes/deletes a campaign event and its dependent records.
+ */
+export async function deleteCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const id = typeof req.params.id === 'string' ? req.params.id : (req.params.id as string[])[0];
+    if (!id) {
+      res.status(400).json({ error: 'BadRequest', message: 'Campaign ID is required.' });
+      return;
+    }
+
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+    });
+
+    if (!campaign) {
+      res.status(404).json({ error: 'NotFound', message: 'Campaign event not found.' });
+      return;
+    }
+
+    // Safely remove any dependent records
+    await prisma.application.deleteMany({ where: { campaignId: id } });
+    await prisma.match.deleteMany({ where: { campaignId: id } });
+    await prisma.campaignShortlist.deleteMany({ where: { campaignId: id } });
+    await prisma.campaignAIProfile.deleteMany({ where: { campaignId: id } });
+    await prisma.conversation.deleteMany({ where: { campaignId: id } });
+    await prisma.collaboration.deleteMany({ where: { campaignId: id } });
+
+    // Delete the campaign
+    await prisma.campaign.delete({
+      where: { id },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Campaign event removed successfully.',
+      data: { id },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+

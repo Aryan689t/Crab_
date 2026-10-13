@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Bookmark, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Bookmark, Clock, ArrowRight, CheckCircle2, Trash2 } from 'lucide-react';
 import { YouTubeIcon, InstagramIcon } from './BrandIcons';
 import { StarRating } from '../ui/StarRating';
 
@@ -29,6 +29,7 @@ interface MarketplaceCampaignCardProps {
   campaign: CampaignData;
   applied?: boolean;
   onSelect: (campaign: CampaignData) => void;
+  onRemove?: (campaignId: string) => Promise<void> | void;
 }
 
 const coverMap: Record<string, string> = {
@@ -50,9 +51,12 @@ export function MarketplaceCampaignCard({
   campaign,
   applied = false,
   onSelect,
+  onRemove,
 }: MarketplaceCampaignCardProps) {
   const [bookmarked, setBookmarked] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   const coverUrl =
     (campaign as any).coverImage ||
@@ -72,8 +76,59 @@ export function MarketplaceCampaignCard({
   return (
     <div
       onClick={() => onSelect(campaign)}
-      className="group bg-white rounded-2xl border border-[#E7E1DA] hover:border-[#FF6B00]/40 transition-all duration-200 shadow-xs hover:shadow-md flex flex-col justify-between overflow-hidden cursor-pointer"
+      className="group relative bg-white rounded-2xl border border-[#E7E1DA] hover:border-[#FF6B00]/40 transition-all duration-200 shadow-xs hover:shadow-md flex flex-col justify-between overflow-hidden cursor-pointer"
     >
+      {/* Remove Event Confirmation Overlay */}
+      {confirmRemoveOpen && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+          className="absolute inset-0 z-30 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div className="bg-white rounded-2xl p-5 border border-[#E7E1DA] shadow-xl text-center space-y-3 max-w-xs w-full">
+            <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <h4 className="text-sm font-bold text-neutral-900">Remove Event?</h4>
+            <p className="text-xs text-neutral-600">
+              Are you sure you want to remove the event?
+            </p>
+            <div className="flex items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmRemoveOpen(false);
+                }}
+                className="px-3.5 py-1.5 rounded-xl border border-[#E7E1DA] text-xs font-semibold text-neutral-700 hover:bg-neutral-100 transition cursor-pointer"
+              >
+                Nope
+              </button>
+              <button
+                type="button"
+                disabled={isRemoving}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  setIsRemoving(true);
+                  try {
+                    if (onRemove) {
+                      await onRemove(campaign.id);
+                    }
+                  } finally {
+                    setIsRemoving(false);
+                    setConfirmRemoveOpen(false);
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                {isRemoving ? 'Removing...' : 'Yes, Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Media & Tags */}
       <div>
         {/* Cover Image Container */}
@@ -85,22 +140,39 @@ export function MarketplaceCampaignCard({
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ease-out"
           />
 
-          {/* Bookmark Button */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setBookmarked(!bookmarked);
-            }}
-            className={`absolute top-3 right-3 p-2 rounded-xl backdrop-blur-md transition shadow-xs cursor-pointer ${
-              bookmarked
-                ? 'bg-[#FF6B00] text-white'
-                : 'bg-white/85 text-[#171717] hover:bg-white hover:text-[#FF6B00]'
-            }`}
-            aria-label="Bookmark campaign"
-          >
-            <Bookmark className="w-4 h-4" fill={bookmarked ? 'currentColor' : 'none'} />
-          </button>
+          {/* Action Buttons: Remove & Bookmark */}
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+            {/* Remove Event Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmRemoveOpen(true);
+              }}
+              title="Remove event"
+              className="p-2 rounded-xl backdrop-blur-md transition shadow-xs cursor-pointer bg-white/85 text-neutral-600 hover:bg-red-50 hover:text-red-600 border border-neutral-200/50"
+              aria-label="Remove event"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+
+            {/* Bookmark Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setBookmarked(!bookmarked);
+              }}
+              className={`p-2 rounded-xl backdrop-blur-md transition shadow-xs cursor-pointer border border-neutral-200/50 ${
+                bookmarked
+                  ? 'bg-[#FF6B00] text-white border-[#FF6B00]'
+                  : 'bg-white/85 text-[#171717] hover:bg-white hover:text-[#FF6B00]'
+              }`}
+              aria-label="Bookmark campaign"
+            >
+              <Bookmark className="w-4 h-4" fill={bookmarked ? 'currentColor' : 'none'} />
+            </button>
+          </div>
 
           {/* Match Score Badge */}
           {matchScore && (

@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useMockStore } from '../../../mock/store';
 import { useAuth } from '../../../lib/auth-context';
-import { fetchApi } from '../../../lib/api';
+import { fetchApi, invalidateApiCache } from '../../../lib/api';
 import {
   Search,
   X,
@@ -24,6 +24,17 @@ function CreatorDiscoverContent() {
   const searchParams = useSearchParams();
 
   const [dbCampaigns, setDbCampaigns] = useState<any[]>([]);
+  const [removedIds, setRemovedIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('crab_removed_campaigns');
+        return stored ? JSON.parse(stored) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
   const [selectedCampaign, setSelectedCampaign] = useState<any | null>(null);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('All');
@@ -44,7 +55,7 @@ function CreatorDiscoverContent() {
 
           if (!mounted) return;
 
-          if (campaignsRes.status === 'fulfilled' && campaignsRes.value?.data && campaignsRes.value.data.length > 0) {
+          if (campaignsRes.status === 'fulfilled' && Array.isArray(campaignsRes.value?.data)) {
             setDbCampaigns(campaignsRes.value.data);
           }
 
@@ -67,11 +78,13 @@ function CreatorDiscoverContent() {
 
   // 2. Transform database campaigns into clean shape
   const campaigns = useMemo(() => {
-    if (!dbCampaigns || dbCampaigns.length === 0) {
-      return mockCampaigns;
+    const validDb = (dbCampaigns || []).filter((c) => !removedIds.includes(c.id));
+
+    if (validDb.length === 0 && (!dbCampaigns || dbCampaigns.length === 0)) {
+      return (mockCampaigns || []).filter((m) => !removedIds.includes(m.id));
     }
 
-    const transformedDb = dbCampaigns.map((c) => {
+    const transformedDb = validDb.map((c) => {
       const niches = c.creatorNiche
         ? c.creatorNiche.split(',').map((s: string) => s.trim())
         : c.aiProfile?.inferredNiches || ['Technology', 'AI Tools'];
@@ -118,9 +131,11 @@ function CreatorDiscoverContent() {
     });
 
     const dbIds = new Set(transformedDb.map((c) => c.id));
-    const extraMocks = mockCampaigns.filter((m) => !dbIds.has(m.id));
+    const extraMocks = (mockCampaigns || []).filter(
+      (m) => !dbIds.has(m.id) && !removedIds.includes(m.id)
+    );
     return [...transformedDb, ...extraMocks];
-  }, [dbCampaigns, mockCampaigns]);
+  }, [dbCampaigns, mockCampaigns, removedIds]);
 
   // 3. Auto-open campaign drawer if ?campaign=id is present in URL
   useEffect(() => {
@@ -176,6 +191,34 @@ function CreatorDiscoverContent() {
   const handleApplySuccess = (campaignId: string) => {
     setAppliedIds((prev) => Array.from(new Set([...prev, campaignId])));
     applyToCampaign(campaignId, user?.id || 'creator_01', 'Applied via Campaign Drawer');
+  };
+
+  const handleRemoveCampaign = async (campaignId: string) => {
+    try {
+      if (token) {
+        await fetchApi(`/api/campaigns/${campaignId}`, { method: 'DELETE' }, token);
+        invalidateApiCache('/api/campaigns');
+      }
+    } catch (err: any) {
+      console.warn('[REMOVE_CAMPAIGN]', err?.message || err);
+    }
+
+    setDbCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
+    setRemovedIds((prev) => {
+      const next = Array.from(new Set([...prev, campaignId]));
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('crab_removed_campaigns', JSON.stringify(next));
+        } catch {
+          // ignore storage error
+        }
+      }
+      return next;
+    });
+
+    if (selectedCampaign?.id === campaignId) {
+      setSelectedCampaign(null);
+    }
   };
 
   return (
@@ -326,6 +369,7 @@ function CreatorDiscoverContent() {
                 campaign={camp}
                 applied={isAlreadyApplied(camp.id)}
                 onSelect={(selected) => setSelectedCampaign(selected)}
+                onRemove={handleRemoveCampaign}
               />
             ))}
           </div>
